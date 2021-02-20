@@ -79,7 +79,7 @@ class Leader(Action):
         self.setLeader(False)
         Action.__init__(self, "leader", "Set leader")
         self.__userId = userId
-        self.setUsersForm(None)
+        self.setUsersFormScroll(None, None)
         
     def paint(self, p):
         i, j, k = (18, 5, 2)
@@ -118,19 +118,39 @@ class Leader(Action):
     
     def setLeader(self, isLeader):
         self.__isLeader = isLeader
-    
+        
+    def mouseMove(self, QMouseEvent):
+        if self.checkUsersScroll():
+            self.__usersScroll.setMoved(True)
+            self.__usersScroll.setScrollDragged(False)
+            self.__usersScroll.mouseMoveEvent(QMouseEvent)
+        
+    def mouseLeftPressed(self, QMouseEvent):
+        Action.mouseLeftPressed(self, QMouseEvent)
+        if self.checkUsersScroll():
+            self.__usersScroll.mouseLeftPressed(QMouseEvent)
+         
     def mouseLeftReleased(self, QMouseEvent):
         Action.mouseLeftReleased(self, QMouseEvent)
-        if not self.__isLeader:
-            self.setLeader(True)
-            self.__usersForm.setCurrentLeader(self.__userId)
-            self.__usersForm.setCurrentLeaderButton(self)
+        if self.__usersScroll.isMoved:
+            self.__usersScroll.setMoved(False)
+        else:
+            if not self.__isLeader:
+                self.setLeader(True)
+                self.__usersForm.setCurrentLeader(self.__userId)
+                self.__usersForm.setCurrentLeaderButton(self)
+        if self.checkUsersScroll():
+            self.__usersScroll.mouseLeftReleased(QMouseEvent)
         
     def checkUsersForm(self):
         return not self.__usersForm is None
     
-    def setUsersForm(self, usersForm):
+    def checkUsersScroll(self):
+        return not self.__usersScroll is None
+    
+    def setUsersFormScroll(self, usersForm, usersScroll):
         self.__usersForm = usersForm
+        self.__usersScroll = usersScroll
         if self.checkUsersForm():
             if self.checkLeaderId():
                 self.setLeader(True)
@@ -142,7 +162,7 @@ class Edit(Action):
         self.setLeader(None)
         self.__userId = userId
         self.__user = user
-        self.setUsersForm(None)
+        self.setUsersFormScroll(None, None)
         Action.__init__(self, "edit")
         
     def setClicked(self, isClicked):
@@ -192,10 +212,26 @@ class Edit(Action):
         self.addText(border)
         self.addTextToGrid("border")
 
+    def mouseMove(self, QMouseEvent):
+        if self.checkUsersScroll():
+            self.__usersScroll.setMoved(True)
+            self.__usersScroll.setScrollDragged(False)
+            self.__usersScroll.mouseMoveEvent(QMouseEvent)
+        
     def mouseLeftPressed(self, QMouseEvent):
         Action.mouseLeftPressed(self, QMouseEvent)
-        self.setClicked(True)
-        
+        if self.checkUsersScroll():
+            self.__usersScroll.mouseLeftPressed(QMouseEvent)
+        if self.__usersScroll.isMoved:
+            self.__usersScroll.setMoved(False)
+        else:
+            self.setClicked(True)
+            
+    def mouseLeftReleased(self, QMouseEvent):
+        Action.mouseLeftReleased(self, QMouseEvent)
+        if self.checkUsersScroll():
+            self.__usersScroll.mouseLeftReleased(QMouseEvent)
+            
     def getLastEditorId(self):
         return self.__usersForm.getLastEditorId()
     
@@ -205,8 +241,12 @@ class Edit(Action):
     def checkUsersForm(self):
         return not self.__usersForm is None
     
-    def setUsersForm(self, usersForm):
+    def checkUsersScroll(self):
+        return not self.__usersScroll is None
+    
+    def setUsersFormScroll(self, usersForm, usersScroll):
         self.__usersForm = usersForm
+        self.__usersScroll = usersScroll
         if self.checkUsersForm():
             if self.checkEditorId():
                 self.setClicked(True)
@@ -233,8 +273,8 @@ class User(Button):
     def setUsersFormScroll(self, usersForm, usersScroll):
         self.__usersScroll = usersScroll
         leader, edit = tuple(self.getChildButtons().values())
-        leader.setUsersForm(usersForm)
-        edit.setUsersForm(usersForm)
+        leader.setUsersFormScroll(usersForm, usersScroll)
+        edit.setUsersFormScroll(usersForm, usersScroll)
         edit.setLeader(leader)
         
     def checkUsersScroll(self):

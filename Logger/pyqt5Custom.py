@@ -1479,6 +1479,9 @@ class ScrollArea(QScrollArea):
         for b in bars:
             bar, i = bars[b]
             bar.setStyleSheet("" if isVisible else "{}: 0".format(i))
+            
+    def setMoved(self, isMoved):
+        self.isMoved = isMoved
         
     def setDraggable(self, draggable):
         self.draggable = draggable
@@ -1516,6 +1519,8 @@ class ScrollArea(QScrollArea):
     def mouseMoveEvent(self, QMouseEvent):
         if self.draggable:
             if not self.startPosition is None:
+                if not self.isMoved:
+                    self.setMoved(True)
                 currentPosition = QMouseEvent.pos()
                 if self.__checkScrollBarVisibility(self.verticalScrollBar()):
                     self.__calculateScrollValue(self.verticalScrollBar(), currentPosition.y(), self.startPosition.y())
