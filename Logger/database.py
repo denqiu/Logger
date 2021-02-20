@@ -25,14 +25,11 @@ class Create(CreateSql, Execute):
         code.setForeignIds("user")
         code.setKeys("index", "deliverable", "user_id")
         i = self.createTable(table, code, True, False, i)
-        cid, table, code = self.begin_table("current_leader")
-        code.setKeys("primary", cid).renamePrimaryKey("user_id")
-        code.setForeignIds("user")
-        i = self.createTable(table, code, False, False, i)
-        self.addTableToManageColumns(table, code.column_count)
-        tables = ("current_editor", "last_editor")
-        for t in tables:
-            table, code = self.setTracker(t, "user_id", "int", 0)
+        tables = ("current_leader", "current_editor", "last_editor")
+        defaults = (1, 0, 0)
+        tables = tuple(zip(tables, defaults))
+        for (t, default) in tables:
+            table, code = self.setTracker(t, "user_id", "int", default)
             i = self.createTable(table, code, False, False, i)
             self.addTableToManageColumns(table, code.column_count)
         table, code = self.trackScroll("users_scroll", 0, self.HORIZONTAL_SCROLLBAR)
@@ -138,7 +135,6 @@ class PrepareInserts(PreparedInsertStatements, Execute):
     def execute(self, i=1):
         i = PreparedInsertStatements.execute(self, i)
         i = self.addPrimaryId().addArg("string", 2).addMethod(i)
-        i = self.addArg("int").addMethod(i)
         i = self.addPrimaryId().addArg("string").addArg("int").addMethod(i)
         i = self.addPrimaryId().addArg("int", 2).addMethod(i)
         i = self.addTableId("item").addArg("datetime").addArg("date").addMethod(i)
@@ -170,11 +166,6 @@ class Adds(AddSql, Execute):
         code.append("call insert_id_string1_int1('deliverable', deliverable, manage_user_id());")
         args = "in first_name varchar(255), in last_name varchar(255), in deliverable varchar(255)"
         i = self.createProcedure("add_user", args, code, i)
-        code.clear()
-        code.append("set @user_id = get_user_id(first_name, last_name)")
-        code.append("call insert_int1('current_leader', @user_id);")
-        args = "in first_name varchar(255), in last_name varchar(255)"
-        i = self.createProcedure("add_current_leader", args, code, i)
         code.clear()
         code.append("set @startDate = create_start_date(start_date)")
         code.append("set @endDate = create_end_date(@startDate, hours, minutes)")
@@ -230,9 +221,7 @@ class Start(StartSql, Execute):
                 self.db.callProcedure(None, "add_user", first_name, last_name, deliverable)
                 query = "select user.user_id, get_user(user.user_id) as user, deliverable_id, deliverable from user, deliverable where user.user_id = get_user_id(%s, %s) and user.user_id = deliverable.user_id"
                 self.db.setArgs(first_name, last_name).query(query)
-            self.db.callProcedure(None, "add_current_leader", firsts[0], lasts[0])
-            self.db.query("select user_id, get_user(user_id) as user from current_leader")
-            tables = ("current_editor", "last_editor")
+            tables = ("current_leader", "current_editor", "last_editor")
             for t in tables:
                 self.db.modify("insert into {} values ()".format(t))
                 self.db.query("select user_id, get_user(user_id) as user from {}".format(t))

@@ -932,8 +932,8 @@ class QtWorkbenchSql(ParentWindow):
                     c.close()
                     return create
                     
-                def mouseLeftReleased(self):
-                    Button.mouseLeftReleased(self)
+                def mouseLeftReleased(self, QMouseEvent):
+                    Button.mouseLeftReleased(self, QMouseEvent)
                     test = self.testConnection()
                     message = self.setupConn.setMessage
                     if type(test) is dict:
@@ -954,8 +954,8 @@ class QtWorkbenchSql(ParentWindow):
                     super().__init__(*text)
                     self.setupConn = setupConn
                     
-                def mouseLeftReleased(self):
-                    Button.mouseLeftReleased(self)
+                def mouseLeftReleased(self, QMouseEvent):
+                    Button.mouseLeftReleased(self, QMouseEvent)
                     self.setupConn.close()
                     
             class Ok(Button):
@@ -964,8 +964,8 @@ class QtWorkbenchSql(ParentWindow):
                     self.setupConn = setupConn
                     self.scrollForm = scrollForm
                     
-                def mouseLeftReleased(self):
-                    Button.mouseLeftReleased(self)
+                def mouseLeftReleased(self, QMouseEvent):
+                    Button.mouseLeftReleased(self, QMouseEvent)
                     search = SearchForm().searchNames("test")
                     test = self.setupConn.searchObjects(search).mergeResults().results["test"]
                     results = test.testConnection(True)
@@ -1048,12 +1048,12 @@ class QtWorkbenchSql(ParentWindow):
             self.mainWindow = mainWindow
             self.scrollForm = scrollForm
                              
-        def mouseLeftReleased(self):
-            Button.mouseLeftReleased(self)
+        def mouseLeftReleased(self, QMouseEvent):
+            Button.mouseLeftReleased(self, QMouseEvent)
             if not self.mainWindow is None:
-                self.mainWindow.setChildWindows(self.SetupConnection(self))
-#                 results = {"name": "connect name", "user": "some user", "host": "a host", "connect": "connect"}
-#                 self.scrollForm.addConnection(results)
+#                 self.mainWindow.setChildWindows(self.SetupConnection(self))
+                results = {"name": "connect name", "user": "some user", "host": "a host", "connect": "connect"}
+                self.scrollForm.addConnection(results)
             
     class _Manage(Button):
         def __init__(self, *text):
@@ -1062,16 +1062,36 @@ class QtWorkbenchSql(ParentWindow):
     class _ScrollForm(Form):           
         class Connect(ScrollChildButton):
             def __init__(self, index, *text):
+                self.isMoved = False
                 super().__init__(index, *text)
                 self.setFixedSize(300, 125)
                 self.setConnection(None)
                 
             def setConnection(self, connect):
                 self.connect = connect
+                    
+            def checkScrollArea(self):
+                return not self.getScrollArea() is None
                 
-            def mouseLeftReleased(self):
-                ScrollChildButton.mouseLeftReleased(self)
-                print(self.connect)
+            def mouseMove(self, QMouseEvent):
+                if self.checkScrollArea():
+                    self.isMoved = True
+                    self.getScrollArea().setScrollDragged(False)
+                    self.getScrollArea().mouseMoveEvent(QMouseEvent)
+                
+            def mouseLeftPressed(self, QMouseEvent):
+                ScrollChildButton.mouseLeftPressed(self, QMouseEvent)
+                if self.checkScrollArea():
+                    self.getScrollArea().mouseLeftPressed(QMouseEvent)
+                 
+            def mouseLeftReleased(self, QMouseEvent):
+                ScrollChildButton.mouseLeftReleased(self, QMouseEvent)
+                if self.isMoved:
+                    self.isMoved = False
+                else:
+                    print(self.connect)
+                if self.checkScrollArea():
+                    self.getScrollArea().mouseLeftReleased(QMouseEvent)
                     
         def __init__(self):
             self.index = 1
@@ -1129,7 +1149,10 @@ class QtWorkbenchSql(ParentWindow):
         vbox = QVBoxLayout(self)
         vbox.addLayout(self.__titleForm.layout())
         self.__scrollForm = self._ScrollForm()
-        vbox.addWidget(ScrollArea(self.__scrollForm.group()))
+        scroll = ScrollArea(self.__scrollForm.group())
+        scroll.setDraggable(True)
+        scroll.setScrollBarVisibility(False)
+        vbox.addWidget(scroll)
          
     def changeEvent(self, QEvent):
         ParentWindow.changeEvent(self, QEvent)

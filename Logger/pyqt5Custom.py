@@ -1444,6 +1444,9 @@ class ChildButton(Button):
             self.__button.mouseReleaseEvent(QMouseEvent)
         
 class ScrollArea(QScrollArea):
+    VERTICAL_SCROLLBAR = "vertical"
+    HORIZONTAL_SCROLLBAR = "horizontal"
+    
     def __init__(self, obj, draggable = False):
         self.setDraggable(draggable)
         super().__init__()
@@ -1468,8 +1471,18 @@ class ScrollArea(QScrollArea):
         s.setAttribute("border", "0")
         self.setStyleSheet(s.css())
         
+    def setScrollBarVisibility(self, isVisible, scrollBar = None):
+        bars = {self.VERTICAL_SCROLLBAR: (self.verticalScrollBar(), "width"), self.HORIZONTAL_SCROLLBAR: (self.horizontalScrollBar(), "height")}
+        if not scrollBar is None:
+            if scrollBar in bars:
+                bars = {scrollBar: bars[scrollBar]}
+        for b in bars:
+            bar, i = bars[b]
+            bar.setStyleSheet("" if isVisible else "{}: 0".format(i))
+        
     def setDraggable(self, draggable):
         self.draggable = draggable
+        self.setScrollDragged(draggable)
       
     def setCurrentIndex(self, i):
         self.currentIndex = i
@@ -1486,6 +1499,9 @@ class ScrollArea(QScrollArea):
                 if self.previousButton.entered:
                     self.previousButton.leaveEvent(QMouseEvent)
                     
+    def setScrollDragged(self, isScrollDragged):
+        self.__isScrollDragged = isScrollDragged
+                    
     def __calculateScrollValue(self, bar, currentPosition, startPosition):
         value = bar.value() + (startPosition-currentPosition)
         if value < bar.minimum():
@@ -1493,16 +1509,22 @@ class ScrollArea(QScrollArea):
         elif value > bar.maximum():
             value = bar.maximum()
         bar.setValue(value)
+        
+    def __checkScrollBarVisibility(self, bar):
+        return bar.isVisible() or bar.styleSheet() != ""
                     
     def mouseMoveEvent(self, QMouseEvent):
         if self.draggable:
             if not self.startPosition is None:
                 currentPosition = QMouseEvent.pos()
-                if self.verticalScrollBar().isVisible():
+                if self.__checkScrollBarVisibility(self.verticalScrollBar()):
                     self.__calculateScrollValue(self.verticalScrollBar(), currentPosition.y(), self.startPosition.y())
-                if self.horizontalScrollBar().isVisible():
+                if self.__checkScrollBarVisibility(self.horizontalScrollBar()):
                     self.__calculateScrollValue(self.horizontalScrollBar(), currentPosition.x(), self.startPosition.x())
-                self.startPosition = currentPosition
+                if self.__isScrollDragged:
+                    self.startPosition = currentPosition
+                else:
+                    self.setScrollDragged(True)
                    
     def mouseRightPressed(self, QMouseEvent):
         pass

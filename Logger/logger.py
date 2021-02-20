@@ -239,9 +239,10 @@ class User(Button):
         
     def checkUsersScroll(self):
         return not self.__usersScroll is None
-    
+        
     def mouseMove(self, QMouseEvent):
         if self.checkUsersScroll():
+            self.__usersScroll.setScrollDragged(False)
             self.__usersScroll.mouseMoveEvent(QMouseEvent)
         
     def mouseLeftPressed(self, QMouseEvent):
@@ -282,6 +283,7 @@ class Header(Button):
         
     def mouseMove(self, QMouseEvent):
         if self.checkUsersScroll():
+            self.__usersScroll.setScrollDragged(False)
             self.__usersScroll.mouseMoveEvent(QMouseEvent)
         
     def mouseLeftPressed(self, QMouseEvent):
@@ -446,7 +448,7 @@ class Logger(ParentWindow):
             vbox.addLayout(self.__deliverable.layout())
             self.__usersScroll = ScrollArea(self.__users.group())
             self.__usersScroll.setDraggable(True)
-            #self.__usersScroll.horizontalScrollBar().hide()
+            self.__usersScroll.setScrollBarVisibility(False, ScrollArea.HORIZONTAL_SCROLLBAR)
             vbox.addWidget(self.__usersScroll)
         self.center()
         
@@ -484,3 +486,4 @@ class Logger(ParentWindow):
 
 if __name__ == "__main__":
     Logger()
+    #QtWorkbenchSql()
