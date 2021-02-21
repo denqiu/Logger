@@ -1075,23 +1075,22 @@ class QtWorkbenchSql(ParentWindow):
                 
             def mouseMove(self, QMouseEvent):
                 if self.checkScrollArea():
-                    self.isMoved = True
                     self.getScrollArea().setScrollDragged(False)
                     self.getScrollArea().mouseMoveEvent(QMouseEvent)
                 
-            def mouseLeftPressed(self, QMouseEvent):
-                ScrollChildButton.mouseLeftPressed(self, QMouseEvent)
+            def mouseMiddlePressed(self, QMouseEvent):
+                ScrollChildButton.mouseMiddlePressed(self, QMouseEvent)
                 if self.checkScrollArea():
-                    self.getScrollArea().mouseLeftPressed(QMouseEvent)
+                    self.getScrollArea().mouseMiddlePressed(QMouseEvent)
                  
             def mouseLeftReleased(self, QMouseEvent):
                 ScrollChildButton.mouseLeftReleased(self, QMouseEvent)
-                if self.isMoved:
-                    self.isMoved = False
-                else:
-                    print(self.connect)
+                print(self.connect)
+                
+            def mouseMiddleReleased(self, QMouseEvent):
+                ScrollChildButton.mouseMiddleReleased(self, QMouseEvent)
                 if self.checkScrollArea():
-                    self.getScrollArea().mouseLeftReleased(QMouseEvent)
+                    self.getScrollArea().mouseMiddleReleased(QMouseEvent)
                     
         def __init__(self):
             self.index = 1

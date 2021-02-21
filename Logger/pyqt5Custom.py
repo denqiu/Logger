@@ -997,6 +997,9 @@ class ButtonText(QLabel):
     def mouseLeftPressed(self, QMouseEvent):
         pass
     
+    def mouseMiddlePressed(self, QMouseEvent):
+        pass
+    
     def mouseRightPressed(self, QMouseEvent):
         pass
             
@@ -1004,6 +1007,8 @@ class ButtonText(QLabel):
         if self.isEnabled():
             if QMouseEvent.button() == Qt.LeftButton:
                 self.mouseLeftPressed(QMouseEvent)
+            elif QMouseEvent.button() == Qt.MiddleButton:
+                self.mouseMiddlePressed(QMouseEvent)
             elif QMouseEvent.button() == Qt.RightButton:
                 self.mouseRightPressed(QMouseEvent)
         
@@ -1016,6 +1021,9 @@ class ButtonText(QLabel):
     def mouseLeftReleased(self, QMouseEvent):
         pass
     
+    def mouseMiddleReleased(self, QMouseEvent):
+        pass
+    
     def mouseRightReleased(self, QMouseEvent):
         pass
             
@@ -1023,6 +1031,8 @@ class ButtonText(QLabel):
         if self.isEnabled():
             if QMouseEvent.button() == Qt.LeftButton:
                 self.mouseLeftReleased(QMouseEvent)
+            elif QMouseEvent.button() == Qt.MiddleButton:
+                self.mouseMiddleReleased(QMouseEvent)
             elif QMouseEvent.button() == Qt.RightButton:
                 self.mouseRightReleased(QMouseEvent)
         
@@ -1371,6 +1381,9 @@ class Button(QWidget):
     def mouseRightPressed(self, QMouseEvent):
         pass
     
+    def mouseMiddlePressed(self, QMouseEvent):
+        pass
+    
     def mouseLeftPressed(self, QMouseEvent):
         self.setColor(self, self.backgroundRole(), self.clickColor)
         
@@ -1378,6 +1391,8 @@ class Button(QWidget):
         if self.isEnabled():
             if QMouseEvent.button() == Qt.LeftButton:
                 self.mouseLeftPressed(QMouseEvent)
+            elif QMouseEvent.button() == Qt.MiddleButton:
+                self.mouseMiddlePressed(QMouseEvent)
             elif QMouseEvent.button() == Qt.RightButton:
                 self.mouseRightPressed(QMouseEvent)
                 
@@ -1385,6 +1400,9 @@ class Button(QWidget):
         self.mousePressed(QMouseEvent)
         
     def mouseRightReleased(self, QMouseEvent):
+        pass
+    
+    def mouseMiddleReleased(self, QMouseEvent):
         pass
     
     def mouseLeftReleased(self, QMouseEvent):
@@ -1395,6 +1413,8 @@ class Button(QWidget):
         if self.isEnabled():
             if QMouseEvent.button() == Qt.LeftButton:
                 self.mouseLeftReleased(QMouseEvent)
+            elif QMouseEvent.button() == Qt.MiddleButton:
+                self.mouseMiddleReleased(QMouseEvent)
             elif QMouseEvent.button() == Qt.RightButton:
                 self.mouseRightReleased(QMouseEvent)
                 
@@ -1447,8 +1467,12 @@ class ScrollArea(QScrollArea):
     VERTICAL_SCROLLBAR = "vertical"
     HORIZONTAL_SCROLLBAR = "horizontal"
     
-    def __init__(self, obj, draggable = False):
-        self.setDraggable(draggable)
+    SCROLL_ON_LEFT_BUTTON = "left_button"
+    SCROLL_ON_MIDDLE_BUTTON = "middle_button"
+    SCROLL_ON_RIGHT_BUTTON = "right_button"
+
+    def __init__(self, obj, draggable = False, *dragMouseButtons):
+        self.setDraggable(draggable, *dragMouseButtons)
         super().__init__()
         self.setObjectName("scroll-area")
         self.currentIndex = -1
@@ -1471,6 +1495,12 @@ class ScrollArea(QScrollArea):
         s.setAttribute("border", "0")
         self.setStyleSheet(s.css())
         
+    def setMouseButtonsToDragScroll(self, *mouseButtons):
+        self.__scrollMouseButtons = mouseButtons
+        
+    def getMouseButtonsToDragScroll(self):
+        return self.__scrollMouseButtons
+        
     def setScrollBarVisibility(self, isVisible, scrollBar = None):
         bars = {self.VERTICAL_SCROLLBAR: (self.verticalScrollBar(), "width"), self.HORIZONTAL_SCROLLBAR: (self.horizontalScrollBar(), "height")}
         if not scrollBar is None:
@@ -1480,12 +1510,17 @@ class ScrollArea(QScrollArea):
             bar, i = bars[b]
             bar.setStyleSheet("" if isVisible else "{}: 0".format(i))
             
-    def setMoved(self, isMoved):
-        self.isMoved = isMoved
-        
-    def setDraggable(self, draggable):
+    def setDraggable(self, draggable, *dragMouseButtons):
         self.draggable = draggable
         self.setScrollDragged(draggable)
+        self.startPosition = None
+        if draggable:
+            if len(dragMouseButtons) > 0:
+                self.setMouseButtonsToDragScroll(*dragMouseButtons)
+            else:
+                self.setMouseButtonsToDragScroll(self.SCROLL_ON_MIDDLE_BUTTON)
+        else:
+            self.setMouseButtonsToDragScroll()
       
     def setCurrentIndex(self, i):
         self.currentIndex = i
@@ -1519,8 +1554,6 @@ class ScrollArea(QScrollArea):
     def mouseMoveEvent(self, QMouseEvent):
         if self.draggable:
             if not self.startPosition is None:
-                if not self.isMoved:
-                    self.setMoved(True)
                 currentPosition = QMouseEvent.pos()
                 if self.__checkScrollBarVisibility(self.verticalScrollBar()):
                     self.__calculateScrollValue(self.verticalScrollBar(), currentPosition.y(), self.startPosition.y())
@@ -1530,35 +1563,53 @@ class ScrollArea(QScrollArea):
                     self.startPosition = currentPosition
                 else:
                     self.setScrollDragged(True)
+    
+    def __startScroll(self, QMouseEvent, mouseButton):
+        if self.draggable:
+            if mouseButton in self.__scrollMouseButtons:
+                self.startPosition = QMouseEvent.pos()
                    
     def mouseRightPressed(self, QMouseEvent):
-        pass
+        self.__startScroll(QMouseEvent, self.SCROLL_ON_RIGHT_BUTTON)
+        
+    def mouseMiddlePressed(self, QMouseEvent):
+        self.__startScroll(QMouseEvent, self.SCROLL_ON_MIDDLE_BUTTON)
     
     def mouseLeftPressed(self, QMouseEvent):
-        if self.draggable:
-            self.startPosition = QMouseEvent.pos()
+        self.__startScroll(QMouseEvent, self.SCROLL_ON_LEFT_BUTTON)
         
     def mousePressed(self, QMouseEvent):       
         if self.isEnabled():
             if QMouseEvent.button() == Qt.LeftButton:
                 self.mouseLeftPressed(QMouseEvent)
+            elif QMouseEvent.button() == Qt.MiddleButton:
+                self.mouseMiddlePressed(QMouseEvent)
             elif QMouseEvent.button() == Qt.RightButton:
                 self.mouseRightPressed(QMouseEvent)
                 
     def mousePressEvent(self, QMouseEvent):
         self.mousePressed(QMouseEvent)
         
+    def __endScroll(self, mouseButton):
+        if self.draggable:
+            if mouseButton in self.__scrollMouseButtons:
+                self.startPosition = None
+    
     def mouseRightReleased(self, QMouseEvent):
-        pass
+        self.__endScroll(self.SCROLL_ON_RIGHT_BUTTON)
+        
+    def mouseMiddleReleased(self, QMouseEvent):
+        self.__endScroll(self.SCROLL_ON_MIDDLE_BUTTON)
     
     def mouseLeftReleased(self, QMouseEvent):
-        if self.draggable:
-            self.startPosition = None
+        self.__endScroll(self.SCROLL_ON_LEFT_BUTTON)
 
     def mouseReleased(self, QMouseEvent):
         if self.isEnabled():
             if QMouseEvent.button() == Qt.LeftButton:
                 self.mouseLeftReleased(QMouseEvent)
+            elif QMouseEvent.button() == Qt.MiddleButton:
+                self.mouseMiddleReleased(QMouseEvent)
             elif QMouseEvent.button() == Qt.RightButton:
                 self.mouseRightReleased(QMouseEvent)
                 

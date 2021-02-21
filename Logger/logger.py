@@ -118,30 +118,27 @@ class Leader(Action):
     
     def setLeader(self, isLeader):
         self.__isLeader = isLeader
+       
+    def mouseLeftReleased(self, QMouseEvent):
+        Action.mouseLeftReleased(self, QMouseEvent)
+        if not self.__isLeader:
+            self.setLeader(True)
+            self.__usersForm.setCurrentLeader(self.__userId)
+            self.__usersForm.setCurrentLeaderButton(self)
         
     def mouseMove(self, QMouseEvent):
         if self.checkUsersScroll():
-            self.__usersScroll.setMoved(True)
             self.__usersScroll.setScrollDragged(False)
             self.__usersScroll.mouseMoveEvent(QMouseEvent)
         
-    def mouseLeftPressed(self, QMouseEvent):
-        Action.mouseLeftPressed(self, QMouseEvent)
+    def mouseMiddlePressed(self, QMouseEvent):
         if self.checkUsersScroll():
-            self.__usersScroll.mouseLeftPressed(QMouseEvent)
-         
-    def mouseLeftReleased(self, QMouseEvent):
-        Action.mouseLeftReleased(self, QMouseEvent)
-        if self.__usersScroll.isMoved:
-            self.__usersScroll.setMoved(False)
-        else:
-            if not self.__isLeader:
-                self.setLeader(True)
-                self.__usersForm.setCurrentLeader(self.__userId)
-                self.__usersForm.setCurrentLeaderButton(self)
+            self.__usersScroll.mouseMiddlePressed(QMouseEvent)
+            
+    def mouseMiddleReleased(self, QMouseEvent):
         if self.checkUsersScroll():
-            self.__usersScroll.mouseLeftReleased(QMouseEvent)
-        
+            self.__usersScroll.mouseMiddleReleased(QMouseEvent)
+            
     def checkUsersForm(self):
         return not self.__usersForm is None
     
@@ -195,14 +192,17 @@ class Edit(Action):
         p.drawLine(f, g)
         return p
     
+    def __switchColors(self):
+        b = self.backgroundColor
+        self.backgroundColor = self.hoverColor
+        self.hoverColor = b
+    
     def paintEvent(self, event):
         Action.paintEvent(self, event)
         if self.__isClicked:
             self.setClicked(False)
             self.setColor(self, self.backgroundRole(), self.hoverColor)
-            b = self.backgroundColor
-            self.backgroundColor = self.hoverColor
-            self.hoverColor = b
+            self.__switchColors()
             self.__usersForm.setEditorView(self.__user, self.__userId)
             self.__leader.setEnabled(not self.__leader.isEnabled())
         border = self.getText("border")["border"]
@@ -211,26 +211,23 @@ class Edit(Action):
         border.setStyleSheet(s.css())
         self.addText(border)
         self.addTextToGrid("border")
-
+       
+    def mouseLeftPressed(self, QMouseEvent):
+        Action.mouseLeftPressed(self, QMouseEvent)
+        self.setClicked(True)
+        
     def mouseMove(self, QMouseEvent):
         if self.checkUsersScroll():
-            self.__usersScroll.setMoved(True)
             self.__usersScroll.setScrollDragged(False)
             self.__usersScroll.mouseMoveEvent(QMouseEvent)
         
-    def mouseLeftPressed(self, QMouseEvent):
-        Action.mouseLeftPressed(self, QMouseEvent)
+    def mouseMiddlePressed(self, QMouseEvent):
         if self.checkUsersScroll():
-            self.__usersScroll.mouseLeftPressed(QMouseEvent)
-        if self.__usersScroll.isMoved:
-            self.__usersScroll.setMoved(False)
-        else:
-            self.setClicked(True)
+            self.__usersScroll.mouseMiddlePressed(QMouseEvent)
             
-    def mouseLeftReleased(self, QMouseEvent):
-        Action.mouseLeftReleased(self, QMouseEvent)
+    def mouseMiddleReleased(self, QMouseEvent):
         if self.checkUsersScroll():
-            self.__usersScroll.mouseLeftReleased(QMouseEvent)
+            self.__usersScroll.mouseMiddleReleased(QMouseEvent)
             
     def getLastEditorId(self):
         return self.__usersForm.getLastEditorId()
@@ -285,13 +282,13 @@ class User(Button):
             self.__usersScroll.setScrollDragged(False)
             self.__usersScroll.mouseMoveEvent(QMouseEvent)
         
-    def mouseLeftPressed(self, QMouseEvent):
+    def mouseMiddlePressed(self, QMouseEvent):
         if self.checkUsersScroll():
-            self.__usersScroll.mouseLeftPressed(QMouseEvent)
+            self.__usersScroll.mouseMiddlePressed(QMouseEvent)
             
-    def mouseLeftReleased(self, QMouseEvent):
+    def mouseMiddleReleased(self, QMouseEvent):
         if self.checkUsersScroll():
-            self.__usersScroll.mouseLeftReleased(QMouseEvent)
+            self.__usersScroll.mouseMiddleReleased(QMouseEvent)
             
 class Header(Button):
     def __init__(self, user, userId):
@@ -326,13 +323,13 @@ class Header(Button):
             self.__usersScroll.setScrollDragged(False)
             self.__usersScroll.mouseMoveEvent(QMouseEvent)
         
-    def mouseLeftPressed(self, QMouseEvent):
+    def mouseMiddlePressed(self, QMouseEvent):
         if self.checkUsersScroll():
-            self.__usersScroll.mouseLeftPressed(QMouseEvent)
+            self.__usersScroll.mouseMiddlePressed(QMouseEvent)
             
-    def mouseLeftReleased(self, QMouseEvent):
+    def mouseMiddleReleased(self, QMouseEvent):
         if self.checkUsersScroll():
-            self.__usersScroll.mouseLeftReleased(QMouseEvent)
+            self.__usersScroll.mouseMiddleReleased(QMouseEvent)
             
 # class Users(QHBoxLayout):         
 #     def __init__(self, logger):
