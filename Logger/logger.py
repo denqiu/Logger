@@ -526,7 +526,9 @@ class Logger(ParentWindow):
             self.__usersScroll = UsersScroll(self.__users, self)
             vbox.addWidget(self.__usersScroll)
         else:
-            vbox.addWidget(QLabel(self.db))
+            error = QLabel(self.db)
+            error.setFont(self.getFont(16))
+            vbox.addWidget(error)
         self.center()
         isMaximized = self.getWindowStateMaximized()
         if not isMaximized is None:
