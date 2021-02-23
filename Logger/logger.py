@@ -518,13 +518,15 @@ class Logger(ParentWindow):
     def setupWindow(self):
         ParentWindow.setupWindow(self)
         self.setWindowTitle("CSC 450 Music Sharing Logger")
+        vbox = QVBoxLayout(self)
         if self.checkDb():
-            vbox = QVBoxLayout(self)
             self.__deliverable = Deliverable(self)
             self.__users = Users(self, self.__deliverable)
             vbox.addLayout(self.__deliverable.layout())
             self.__usersScroll = UsersScroll(self.__users, self)
             vbox.addWidget(self.__usersScroll)
+        else:
+            vbox.addWidget(QLabel(self.db))
         self.center()
         isMaximized = self.getWindowStateMaximized()
         if not isMaximized is None:
