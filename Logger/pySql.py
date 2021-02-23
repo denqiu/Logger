@@ -78,6 +78,7 @@ class WriteSql:
     
     def clear(self):
         self.code.clear()
+        self.column_count = 0
         return self
     
     def __str__(self):
@@ -1051,9 +1052,9 @@ class QtWorkbenchSql(ParentWindow):
         def mouseLeftReleased(self, QMouseEvent):
             Button.mouseLeftReleased(self, QMouseEvent)
             if not self.mainWindow is None:
-#                 self.mainWindow.setChildWindows(self.SetupConnection(self))
-                results = {"name": "connect name", "user": "some user", "host": "a host", "connect": "connect"}
-                self.scrollForm.addConnection(results)
+                self.mainWindow.setChildWindows(self.SetupConnection(self))
+#                 results = {"name": "connect name", "user": "some user", "host": "a host", "connect": "connect"}
+#                 self.scrollForm.addConnection(results)
             
     class _Manage(Button):
         def __init__(self, *text):

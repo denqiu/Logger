@@ -95,13 +95,13 @@ class Leader(Action):
         return p
     
     def defaultColor(self):
-        if self.__isLeader:
+        if self.isLeader():
             return self.backgroundColor
         return Action.defaultColor(self)
     
     def paintEvent(self, event):
         Action.paintEvent(self, event)
-        if self.__isLeader:
+        if self.isLeader():
             self.setColor(self, self.backgroundRole(), self.hoverColor)
         border = self.getText("border")["border"]
         s = Style(border.styleSheet())
@@ -118,10 +118,16 @@ class Leader(Action):
     
     def setLeader(self, isLeader):
         self.__isLeader = isLeader
+        
+    def isLeader(self):
+        return self.__isLeader
+    
+    def getUserId(self):
+        return self.__userId
        
     def mouseLeftReleased(self, QMouseEvent):
         Action.mouseLeftReleased(self, QMouseEvent)
-        if not self.__isLeader:
+        if not self.isLeader():
             self.setLeader(True)
             self.__usersForm.setCurrentLeader(self.__userId)
             self.__usersForm.setCurrentLeaderButton(self)
@@ -398,15 +404,22 @@ class Users(Form):
     
     def getItems(self):
         return self.getScroll().widget().getForm()
+    
+    def getUsersScroll(self):
+        return self.layout().parent().parent().parent()
         
     def setEditorView(self, user, userId):
         search = SearchForm().searchClasses(Button)
         buttons = self.searchObjects(search).mergeResults().results
         buttons = tuple(buttons.values())
         buttons = [b for b in buttons if not user in b.objectName()]
+        if self.__currentLeader.getUserId() != userId:
+            if self.__currentLeader.isLeader():
+                self.__leaveLeader()
+            else:
+                self.__currentLeader.setLeader(True)
         for b in buttons:
             b.setVisible(not b.isVisible())
-        logger = self.getParent()
         self.updateCurrentEditor(userId)
         self.__refresh.mouseLeftReleased(QMouseEvent)
         self.__refresh.leave(QMouseEvent)
@@ -419,41 +432,67 @@ class Users(Form):
         num, d = tuple(d.values())
         self.__deliverable.setText("Deliverable #{}: {}".format(num, d))
         
-    def setCurrentLeader(self, userId):
+    def __leaveLeader(self):
         self.__currentLeader.setLeader(False)
         self.__currentLeader.leave(QMouseEvent)
-        self.updateCurrentLeader(userId)
         
-    def __getId(self, table):
-        logger = self.getParent()
-        logger.db.query("select get_{}_id() as id".format(table))
-        return logger.db.results[2][0]["id"]
+    def setCurrentLeader(self, userId):
+        self.__leaveLeader()
+        self.updateCurrentLeader(userId)
     
-    def __updateTable(self, table, userId):
-        logger = self.getParent()
-        if userId is None:
-            logger.db.callProcedure(None, "update_{}".format(table))
-        else:
-            logger.db.callProcedure(None, "update_{}".format(table), userId)
-        logger.db.query("select user_id, get_user(user_id) as user from {}".format(table))
-            
     def getCurrentLeaderId(self):
-        return self.__getId("current_leader")
+        return self.getParent().getCurrentLeaderId()
   
     def getCurrentEditorId(self):
-        return self.__getId("current_editor")
+        return self.getParent().getCurrentEditorId()
   
     def getLastEditorId(self):
-        return self.__getId("last_editor")
+        return self.getParent().getLastEditorId()
   
     def updateCurrentLeader(self, userId):
-        self.__updateTable("current_leader", userId)
+        return self.getParent().updateCurrentLeader(userId)
         
     def updateCurrentEditor(self, userId):
-        self.__updateTable("current_editor", userId)
+        return self.getParent().updateCurrentEditor(userId)
         
     def updateLastEditor(self):
-        self.__updateTable("last_editor", None)
+        return self.getParent().updateLastEditor()
+        
+class UsersScroll(ScrollArea):
+    def __init__(self, users, logger):
+        self.__logger = logger
+        ScrollArea.__init__(self, users.group(), True)
+        self.setScrollBarVisibility(False, ScrollArea.HORIZONTAL_SCROLLBAR)
+    
+    def calculateScrollValue(self, bar, currentPosition, startPosition):
+        value, _ = ScrollArea.calculateScrollValue(self, bar, currentPosition, startPosition)
+        self.__logger.updateHorizontalScroll(value)
+        return value
+    
+    def setHorizontalScrollValue(self):
+        self.scrollBarValues[ScrollArea.HORIZONTAL_SCROLLBAR] = self.__logger.getHorizontalScrollValue()
+    
+    def checkEditorId(self):
+        editorId = self.__logger.getCurrentEditorId()
+        if editorId is None:
+            return False
+        return editorId < 1
+    
+    def mouseMoveEvent(self, QMouseEvent):
+        if self.checkEditorId():
+            ScrollArea.mouseMoveEvent(self, QMouseEvent)
+            
+    def mousePressEvent(self, QMouseEvent):
+        if self.checkEditorId():
+            ScrollArea.mousePressEvent(self, QMouseEvent)
+            
+    def mouseReleaseEvent(self, QMouseEvent):
+        if self.checkEditorId():
+            ScrollArea.mouseReleaseEvent(self, QMouseEvent)
+        
+    def eventFilter(self, QObject, QEvent):
+        self.horizontalScrollBar().setValue(self.scrollBarValues[ScrollArea.HORIZONTAL_SCROLLBAR])
+        return ScrollArea.eventFilter(self, QObject, QEvent)
         
 class Deliverable(Form):
     def __init__(self, logger):
@@ -483,9 +522,7 @@ class Logger(ParentWindow):
             self.__deliverable = Deliverable(self)
             self.__users = Users(self, self.__deliverable)
             vbox.addLayout(self.__deliverable.layout())
-            self.__usersScroll = ScrollArea(self.__users.group())
-            self.__usersScroll.setDraggable(True)
-            self.__usersScroll.setScrollBarVisibility(False, ScrollArea.HORIZONTAL_SCROLLBAR)
+            self.__usersScroll = UsersScroll(self.__users, self)
             vbox.addWidget(self.__usersScroll)
         self.center()
         
@@ -512,6 +549,7 @@ class Logger(ParentWindow):
                         h.setUsersScroll(self.__usersScroll)
                     while self.__usersScroll.verticalScrollBar().isVisible():
                         self.setMinimumHeight(self.height()+1)
+                    self.__usersScroll.setHorizontalScrollValue()
                 self.__start = False
                     
     def closeEvent(self, QEvent):
@@ -520,7 +558,58 @@ class Logger(ParentWindow):
             self.db.callProcedure(None, "update_last_editor")
             self.db.query("select user_id, get_user(user_id) as user from last_editor")
             self.db.close()
+    
+    def __getId(self, table):
+        if self.checkDb():
+            self.db.query("select get_{}_id() as id".format(table))
+            return self.db.results[2][0]["id"]
+        return None
+    
+    def __updateTable(self, table, userId):
+        if self.checkDb():
+            if userId is None:
+                self.db.callProcedure(None, "update_{}".format(table))
+            else:
+                self.db.callProcedure(None, "update_{}".format(table), userId)
+            self.db.query("select user_id, get_user(user_id) as user from {}".format(table))
+            return self.db.results[2][0]
+        return None
+            
+    def getCurrentLeaderId(self):
+        return self.__getId("current_leader")
+  
+    def getCurrentEditorId(self):
+        return self.__getId("current_editor")
+  
+    def getLastEditorId(self):
+        return self.__getId("last_editor")
+  
+    def updateCurrentLeader(self, userId):
+        return self.__updateTable("current_leader", userId)
+        
+    def updateCurrentEditor(self, userId):
+        return self.__updateTable("current_editor", userId)
+        
+    def updateLastEditor(self):
+        return self.__updateTable("last_editor", None)
+        
+    def updateHorizontalScroll(self, value):
+        editorId = self.getCurrentEditorId()
+        if not editorId is None:
+            if editorId < 1:
+                self.db.callProcedure(None, "update_users_horizontal_scroll", value)
+                self.db.query("select horizontal from users_scroll")
+                return self.db.results[2][0]["horizontal"]
+        return None
+            
+    def getHorizontalScrollValue(self):
+        editorId = self.getCurrentEditorId()
+        if not editorId is None:
+            if editorId < 1:
+                self.db.query("select horizontal from users_scroll")
+                return self.db.results[2][0]["horizontal"]
+        return None
 
 if __name__ == "__main__":
-    Logger()
-    #QtWorkbenchSql()
+   # Logger()
+    QtWorkbenchSql()

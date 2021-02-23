@@ -565,10 +565,18 @@ class ParentWindow(QWidget):
     def closeEvent(self, QEvent):
         self.closeChildren()
         
+    def minimizeEvent(self, QEvent):
+        self.minimizeChildren()
+        
+    def maximizeEvent(self, QEvent):
+        pass
+        
     def changeEvent(self, QEvent):
         if QEvent.type() == QEvent.WindowStateChange:
             if self.isMinimized():
-                self.minimizeChildren()
+                self.minimizeEvent(QEvent)
+            elif self.isMaximized():
+                self.maximizeEvent(QEvent)
         elif self.isVisible():
             self.mousePressEvent(QEvent)
                     
@@ -688,9 +696,20 @@ class ChildWindow(QWidget):
         for w in wins[::-1]:
             w.raise_()
             
+    def minimizeEvent(self, QEvent):
+        pass
+            
+    def maximizeEvent(self, QEvent):
+        pass
+            
     def changeEvent(self, QEvent):
         if self.checkParentWindow():
-            if self.isVisible(): #when opening from taskbar
+            if QEvent.type() == QEvent.WindowStateChange:
+                if self.isMinimized():
+                    self.minimizeEvent(QEvent)
+                elif self.isMaximized():
+                    self.maximizeEvent(QEvent)
+            elif self.isVisible(): #when opening from taskbar
                 self.__change()
             
     def mouseReleaseEvent(self, QMouseEvent):
@@ -878,10 +897,18 @@ class Window(QWidget):
         for w in wins[::-1]:
             w.raise_()
             
+    def minimizeEvent(self, QEvent):
+        self.minimizeChildren()
+        
+    def maximizeEvent(self, QEvent):
+        pass
+            
     def changeEvent(self, QEvent):
         if QEvent.type() == QEvent.WindowStateChange:
             if self.isMinimized():
-                self.minimizeChildren()
+                self.minimizeEvent(QEvent)
+            elif self.isMaximized():
+                self.maximizeEvent(QEvent)
         else:
             if self.checkParentWindow():
                 if self.isVisible(): #when opening from taskbar
@@ -1462,7 +1489,17 @@ class ChildButton(Button):
             self.mouseReleased(QMouseEvent)
         else:
             self.__button.mouseReleaseEvent(QMouseEvent)
-        
+            
+class ScrollBar(QScrollBar):
+    def exists(self):
+        if self.isVisible():
+            return True
+        else:
+            for i in ("width: 0", "height: 0"):
+                if i in self.styleSheet():
+                    return True
+        return False
+   
 class ScrollArea(QScrollArea):
     VERTICAL_SCROLLBAR = "vertical"
     HORIZONTAL_SCROLLBAR = "horizontal"
@@ -1474,6 +1511,10 @@ class ScrollArea(QScrollArea):
     def __init__(self, obj, draggable = False, *dragMouseButtons):
         self.setDraggable(draggable, *dragMouseButtons)
         super().__init__()
+        self.setHorizontalScrollBar(ScrollBar())
+        self.setVerticalScrollBar(ScrollBar())
+        self.scrollBars = {self.VERTICAL_SCROLLBAR: self.verticalScrollBar(), self.HORIZONTAL_SCROLLBAR: self.horizontalScrollBar()}
+        self.scrollBarValues = {self.VERTICAL_SCROLLBAR: 0, self.HORIZONTAL_SCROLLBAR: 0}
         self.setObjectName("scroll-area")
         self.currentIndex = -1
         self.previousButton = None
@@ -1489,12 +1530,16 @@ class ScrollArea(QScrollArea):
                     break
             self.setLayout(obj) if isLayout else self.setWidget(obj)
         self.setWidgetResizable(True)
+        self.setBackground()
+        self.installEventFilter(self)
+        
+    def setBackground(self):
         s = Style()
-        s.setWidget("QWidget#scroll-area")
+        s.setWidget("QWidget#{}".format(self.objectName()))
         s.setAttribute("background-color", "white")
         s.setAttribute("border", "0")
         self.setStyleSheet(s.css())
-        
+                        
     def setMouseButtonsToDragScroll(self, *mouseButtons):
         self.__scrollMouseButtons = mouseButtons
         
@@ -1502,14 +1547,13 @@ class ScrollArea(QScrollArea):
         return self.__scrollMouseButtons
         
     def setScrollBarVisibility(self, isVisible, scrollBar = None):
-        bars = {self.VERTICAL_SCROLLBAR: (self.verticalScrollBar(), "width"), self.HORIZONTAL_SCROLLBAR: (self.horizontalScrollBar(), "height")}
+        attributes = {self.VERTICAL_SCROLLBAR: "width", self.HORIZONTAL_SCROLLBAR: "height"}
         if not scrollBar is None:
-            if scrollBar in bars:
-                bars = {scrollBar: bars[scrollBar]}
-        for b in bars:
-            bar, i = bars[b]
-            bar.setStyleSheet("" if isVisible else "{}: 0".format(i))
-            
+            if scrollBar in attributes:
+                attributes = {scrollBar: attributes[scrollBar]}
+        for a in attributes:
+            self.scrollBars[a].setStyleSheet("" if isVisible else "{}: 0".format(attributes[a]))
+                        
     def setDraggable(self, draggable, *dragMouseButtons):
         self.draggable = draggable
         self.setScrollDragged(draggable)
@@ -1540,25 +1584,25 @@ class ScrollArea(QScrollArea):
     def setScrollDragged(self, isScrollDragged):
         self.__isScrollDragged = isScrollDragged
                     
-    def __calculateScrollValue(self, bar, currentPosition, startPosition):
-        value = bar.value() + (startPosition-currentPosition)
-        if value < bar.minimum():
-            value = bar.minimum()
-        elif value > bar.maximum():
-            value = bar.maximum()
-        bar.setValue(value)
+    def calculateScrollValue(self, bar, currentPosition, startPosition):
+        getBar = self.scrollBars[bar]
+        value = getBar.value() + (startPosition-currentPosition)
+        if value < getBar.minimum():
+            value = getBar.minimum()
+        elif value > getBar.maximum():
+            value = getBar.maximum()
+        getBar.setValue(value)
+        self.scrollBarValues[bar] = value
+        return (value, getBar)
         
-    def __checkScrollBarVisibility(self, bar):
-        return bar.isVisible() or bar.styleSheet() != ""
-                    
     def mouseMoveEvent(self, QMouseEvent):
         if self.draggable:
             if not self.startPosition is None:
                 currentPosition = QMouseEvent.pos()
-                if self.__checkScrollBarVisibility(self.verticalScrollBar()):
-                    self.__calculateScrollValue(self.verticalScrollBar(), currentPosition.y(), self.startPosition.y())
-                if self.__checkScrollBarVisibility(self.horizontalScrollBar()):
-                    self.__calculateScrollValue(self.horizontalScrollBar(), currentPosition.x(), self.startPosition.x())
+                if self.verticalScrollBar().exists():
+                    self.calculateScrollValue(self.VERTICAL_SCROLLBAR, currentPosition.y(), self.startPosition.y())
+                if self.horizontalScrollBar().exists():
+                    self.calculateScrollValue(self.HORIZONTAL_SCROLLBAR, currentPosition.x(), self.startPosition.x())
                 if self.__isScrollDragged:
                     self.startPosition = currentPosition
                 else:
@@ -1615,7 +1659,7 @@ class ScrollArea(QScrollArea):
                 
     def mouseReleaseEvent(self, QMouseEvent):
         self.mouseReleased(QMouseEvent)
-          
+        
 class ScrollChildButton(Button):
     def __init__(self, index, *text):
         super().__init__(*text)
