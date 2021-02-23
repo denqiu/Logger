@@ -9,7 +9,7 @@ class Create(CreateSql, Execute):
     def __init__(self, db=None, printText=True, debug=False):
         CreateSql.__init__(self, db, printText, debug, Execute)
         self.dropCreateDatabase("logger")
-        self.start()
+        self.start()        
         
     def execute(self, i=1):
         i = CreateSql.execute(self, i)
@@ -28,16 +28,15 @@ class Create(CreateSql, Execute):
         cid, table, code = self.begin_table("current_leader")
         code.setKeys("primary", cid).renamePrimaryKey("user_id")
         code.setForeignIds("user")
-        i = self.createTable(table, code, False, False, i)
-        self.addTableToManageColumns(table, code.column_count)
+        i = self.createAndAddToManageColumns(table, code, False, i)
         tables = ("current_editor", "last_editor")
         for t in tables:
             table, code = self.setTracker(t, "user_id", "int", 0)
-            i = self.createTable(table, code, False, False, i)
-            self.addTableToManageColumns(table, code.column_count)
+            i = self.createAndAddToManageColumns(table, code, False, i+1)
         table, code = self.trackScroll("users_scroll", 0, self.HORIZONTAL_SCROLLBAR)
-        i = self.createTable(table, code, False, False, i)
-        self.addTableToManageColumns(table, code.column_count)
+        i = self.createAndAddToManageColumns(table, code, False, i+1)
+        table, code = self.trackWindow("logger_window", False, self.MAXIMIZED_WINDOW_STATE)
+        i = self.createAndAddToManageColumns(table, code, False, i+1)
         item_id, table, code = self.begin_table("item")
         code.setColumns("int", "user_id", "leader_id")
         code.setKeys("primary", item_id)
@@ -90,6 +89,8 @@ class Gets(GetSql, Execute):
             i = self.createFunction("get_{}".format(t), "", "varchar(255)", code, i)
         code = "return ifnull((select horizontal from users_scroll), 0);"
         i = self.createFunction("get_users_scroll_horizontal", "", "int", code, i)
+        code = "return ifnull((select maximized from logger_window), false);"
+        i = self.createFunction("get_logger_window_maximized", "", "boolean", code, i)
         i = self.getId("deliverable", "u int", "user_id = u", i)
         code = "return (select deliverable from deliverable where user_id = u);"
         i = self.createFunction("get_deliverable", "u int", "varchar(255)", code, i)
@@ -153,6 +154,7 @@ class PrepareUpdates(PreparedUpdateStatements, Execute):
         
     def execute(self, i=1):  
         i = self.addSetArg("int").addMethod(i)
+        i = self.addSetArg("boolean").addMethod(i)
         i = self.addSetArg("datetime").addSetArg("date").addWhereArg().addMethod(i)
         i = self.addSetArg("date").addWhereArg().addMethod(i)
         i = self.addSetArg("string").addWhereArg().addMethod(i)
@@ -209,6 +211,10 @@ class Updates(UpdateSql, Execute):
         args = "in horizontal int"
         i = self.createProcedure("update_users_horizontal_scroll", args, code, i)
         code.clear()
+        code.append("call update_set_boolean1('logger_window', 'maximized', isMaximized);")
+        args = "in isMaximized boolean"
+        i = self.createProcedure("update_logger_window_maximized", args, code, i)
+        code.clear()
 #         code.append("set @startDate = create_start_date(start_date)")
 #         code.append("set @endDate = create_end_date(@startDate, hours, minutes)")
 #         args = "in item_id int, start_date varchar(255)"
@@ -238,6 +244,8 @@ class Start(StartSql, Execute):
                 self.db.query("select user_id, get_user(user_id) as user from {}".format(t))
             self.db.modify("insert into users_scroll values ()")
             self.db.query("select get_users_scroll_horizontal() as horizontal")
+            self.db.modify("insert into logger_window values ()")
+            self.db.query("select get_logger_window_maximized() as isMaximized")
            
 if __name__ == "__main__":
     db = Create(printText=True, debug=True).db

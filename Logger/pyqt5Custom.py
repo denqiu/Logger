@@ -570,6 +570,9 @@ class ParentWindow(QWidget):
         
     def maximizeEvent(self, QEvent):
         pass
+    
+    def restoreEvent(self, QEvent):
+        pass
         
     def changeEvent(self, QEvent):
         if QEvent.type() == QEvent.WindowStateChange:
@@ -577,6 +580,8 @@ class ParentWindow(QWidget):
                 self.minimizeEvent(QEvent)
             elif self.isMaximized():
                 self.maximizeEvent(QEvent)
+            elif self.windowState() == Qt.WindowNoState:
+                self.restoreEvent(QEvent)
         elif self.isVisible():
             self.mousePressEvent(QEvent)
                     
@@ -701,6 +706,9 @@ class ChildWindow(QWidget):
             
     def maximizeEvent(self, QEvent):
         pass
+    
+    def restoreEvent(self, QEvent):
+        pass
             
     def changeEvent(self, QEvent):
         if self.checkParentWindow():
@@ -709,6 +717,8 @@ class ChildWindow(QWidget):
                     self.minimizeEvent(QEvent)
                 elif self.isMaximized():
                     self.maximizeEvent(QEvent)
+                elif self.windowState() == Qt.WindowNoState:
+                    self.restoreEvent(QEvent)
             elif self.isVisible(): #when opening from taskbar
                 self.__change()
             
@@ -902,6 +912,9 @@ class Window(QWidget):
         
     def maximizeEvent(self, QEvent):
         pass
+    
+    def restoreEvent(self, QEvent):
+        pass
             
     def changeEvent(self, QEvent):
         if QEvent.type() == QEvent.WindowStateChange:
@@ -909,6 +922,8 @@ class Window(QWidget):
                 self.minimizeEvent(QEvent)
             elif self.isMaximized():
                 self.maximizeEvent(QEvent)
+            elif self.windowState() == Qt.WindowNoState:
+                self.restoreEvent(QEvent)
         else:
             if self.checkParentWindow():
                 if self.isVisible(): #when opening from taskbar
@@ -2074,7 +2089,7 @@ class MessageBox(ChildWindow):
         super().__init__(flags=Qt.WindowCloseButtonHint | Qt.MSWindowsFixedSizeDialogHint)
         
     def __getButtonNames(self, name = ""):
-        md = MessageBox.__dict__
+        md = vars(MessageBox)
         buttons = {}
         for b in list(md.keys()).copy():
             if "BUTTON" in b:

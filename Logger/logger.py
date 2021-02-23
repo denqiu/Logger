@@ -461,7 +461,8 @@ class Users(Form):
 class UsersScroll(ScrollArea):
     def __init__(self, users, logger):
         self.__logger = logger
-        ScrollArea.__init__(self, users.group(), True)
+        ScrollArea.__init__(self, users.group())
+        self.setDraggable(True)
         self.setScrollBarVisibility(False, ScrollArea.HORIZONTAL_SCROLLBAR)
     
     def calculateScrollValue(self, bar, currentPosition, startPosition):
@@ -525,10 +526,11 @@ class Logger(ParentWindow):
             self.__usersScroll = UsersScroll(self.__users, self)
             vbox.addWidget(self.__usersScroll)
         self.center()
-        
-    def refresh(self):
-        pass
-        
+        isMaximized = self.getWindowStateMaximized()
+        if not isMaximized is None:
+            if isMaximized:
+                self.showMaximized()
+     
     def changeEvent(self, QEvent):
         ParentWindow.changeEvent(self, QEvent)
         if self.isVisible():
@@ -551,6 +553,12 @@ class Logger(ParentWindow):
                         self.setMinimumHeight(self.height()+1)
                     self.__usersScroll.setHorizontalScrollValue()
                 self.__start = False
+                
+    def maximizeEvent(self, QEvent):
+        self.updateWindowStateMaximized(True)
+        
+    def restoreEvent(self, QEvent):
+        self.updateWindowStateMaximized(False)
                     
     def closeEvent(self, QEvent):
         ParentWindow.closeEvent(self, QEvent)
@@ -592,6 +600,19 @@ class Logger(ParentWindow):
         
     def updateLastEditor(self):
         return self.__updateTable("last_editor", None)
+    
+    def updateWindowStateMaximized(self, isMaximized):
+        if self.checkDb():
+            self.db.callProcedure(None, "update_logger_window_maximized", isMaximized)
+            self.db.query("select get_logger_window_maximized() as maximized")
+            return bool(self.db.results[2][0]["maximized"])
+        return None
+    
+    def getWindowStateMaximized(self):
+        if self.checkDb():
+            self.db.query("select get_logger_window_maximized() as maximized")
+            return bool(self.db.results[2][0]["maximized"])
+        return None
         
     def updateHorizontalScroll(self, value):
         editorId = self.getCurrentEditorId()
@@ -611,5 +632,5 @@ class Logger(ParentWindow):
         return None
 
 if __name__ == "__main__":
-   # Logger()
-    QtWorkbenchSql()
+    Logger()
+    #QtWorkbenchSql()

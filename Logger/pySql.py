@@ -456,6 +456,11 @@ class CreateSql(ExecuteSql):
     VERTICAL_SCROLLBAR = "vertical"
     HORIZONTAL_SCROLLBAR = "horizontal"
     
+    MINIMIZED_WINDOW_STATE = "minimized_state"
+    MAXIMIZED_WINDOW_STATE = "maximized_state"
+    CLOSED_WINDOW_STATE = "closed_state"
+    RESTORED_WINDOW_STATE = "restored_state"
+    
     def __init__(self, db = None, printText = True, debug = False, execute = ExecuteSql):
         execute.__init__(self, "creates", db, printText, debug)
         
@@ -498,6 +503,11 @@ class CreateSql(ExecuteSql):
         if self.isMaintained:
             self.__maintainTable(table)
         self.execute(2)
+        
+    def createAndAddToManageColumns(self, table, code, foreign_checks, index):
+        index = self.createTable(table, code, False, foreign_checks, index)
+        self.addTableToManageColumns(table, code.column_count)
+        return index
         
     def addTableToManageColumns(self, table, column_count):
         if not self.isMaintained:
@@ -550,16 +560,50 @@ class CreateSql(ExecuteSql):
         code.setKeys("index", trackerColumn)
         return (table, code)
     
+    def __getTrackers(self, what):
+        tk = vars(CreateSql)
+        trackers = {}
+        for t in list(tk.keys()).copy():
+            if what in t:
+                trackers[tk[t]] = t[:t.find('_')].lower()
+        return trackers
+        
     def trackScroll(self, table, defaultValue, scrollBar = None):
         code = WriteSql()
+        if isinstance(defaultValue, str):
+            defaultValue = int(defaultValue)
+        if not isinstance(defaultValue, int):
+            print("Default value must be a number.")
+            return (table, code)
         code.setDefault(defaultValue).setNull(False)
-        if scrollBar is None: 
-            columns = ["vertical", "horizontal"]
-        elif scrollBar == self.VERTICAL_SCROLLBAR:
-            columns = ["vertical"]
-        elif scrollBar == self.HORIZONTAL_SCROLLBAR:
-            columns = ["horizontal"]
+        trackScrolls = self.__getTrackers("SCROLLBAR")
+        if not scrollBar is None:
+            if scrollBar in trackScrolls:
+                trackScrolls = {scrollBar: trackScrolls[scrollBar]}
+        columns = tuple(trackScrolls.values())
         code.setColumns("int", *columns)
+        code.setKeys("index", *columns)
+        return (table, code)
+    
+    def trackWindow(self, table, defaultValue, *windowStates):
+        code = WriteSql()
+        for c in (int, str):
+            if isinstance(defaultValue, c):
+                defaultValue = bool(defaultValue)
+                break
+        if not isinstance(defaultValue, bool):
+            print("Default value must be a boolean variable.")
+            return (table, code)
+        code.setDefault(defaultValue).setNull(False)
+        trackStates = self.__getTrackers("WINDOW")
+        if len(windowStates) > 0:
+            t = {}
+            for s in windowStates:
+                if s in trackStates:
+                    t[s] = trackStates[s]
+            trackStates = t
+        columns = tuple(trackStates.values())
+        code.setColumns("boolean", *columns)
         code.setKeys("index", *columns)
         return (table, code)
     
@@ -659,25 +703,32 @@ class TriggerSql(ExecuteSql):
 class PreparedInsertStatements(ExecuteSql):
     def __init__(self, db = None, printText = True, debug = False, execute = ExecuteSql):
         self.clearArgs()
+        self.__setDataTypes()
         execute.__init__(self, "prepared insert statements", db, printText, debug)
+        
+    def __setDataTypes(self):
+        d = {"string": "varchar(255)"}
+        repeats = ["int", "datetime", "date", "boolean"]
+        for r in repeats:
+            d[r] = r
+        self.__dataTypes = d
         
     def clearArgs(self):
         self.__args = {}
         return self
         
-    def __createArgs(self, value, dataTypes, args):
+    def __createArgs(self, value, args):
         f = value.rfind('_')
         if f > -1:
             f = value[f+1:]
-            if f in dataTypes:
-                args[value] = dataTypes[f]
+            if f in self.__dataTypes:
+                args[value] = self.__dataTypes[f]
         return args
         
     def addMethod(self, index):
         a = self.__args
         keys = tuple(a.keys())
         values, args, setStatements = ([], {}, {})
-        dataTypes = {"string": "varchar(255)", "int": "int", "datetime": "datetime", "date": "date"}
         if "id" in keys:
             setStatements["id"] = "0"
         for i in list(a.values()):
@@ -687,7 +738,7 @@ class PreparedInsertStatements(ExecuteSql):
                 setStatements["id"] = v
             else:
                 if not v in setStatements:
-                    args = self.__createArgs(v, dataTypes, args)
+                    args = self.__createArgs(v, args)
                     setStatements[v] = v
         name = "_".join(keys).replace("id_id", "id")
         prepStatement = "concat('insert into ', table_name, ' values (', get_table_column_questions(table_name), ')')"
@@ -734,8 +785,16 @@ class PreparedUpdateStatements(ExecuteSql):
         self.clearArgs()
         self.__whereExists = False
         self.__setWhatCount = 0
+        self.__setDataTypes()
         execute.__init__(self, "prepared update statements", db, printText, debug)
      
+    def __setDataTypes(self):
+        d = {"what": "varchar(255)", "string": "varchar(255)"}
+        repeats = ["int", "datetime", "date", "boolean"]
+        for r in repeats:
+            d[r] = r
+        self.__dataTypes = d
+        
     def clearArgs(self):
         self.__args = {}
         return self
@@ -744,11 +803,10 @@ class PreparedUpdateStatements(ExecuteSql):
         a = self.__args
         keys = list(a.keys())
         values, args, setStatements = ([], {}, {})
-        dataTypes = {"what": "varchar(255)", "string": "varchar(255)", "int": "int", "datetime": "datetime", "date": "date"}
         for i in list(a.values()):
             values += i
         for v in values:
-            args = self.__createArgs(v, dataTypes, args)
+            args = self.__createArgs(v, args)
             if self.checkString(v, "what", False, True):
                 setStatements[v] = v
         if self.__whereExists:
@@ -777,12 +835,12 @@ class PreparedUpdateStatements(ExecuteSql):
         self.__setWhatCount += 1
         return self.__addArg("set", arg, self.__setWhatCount, count)
     
-    def __createArgs(self, value, dataTypes, args):
+    def __createArgs(self, value, args):
         f = value.rfind('_')
         if f > -1:
             f = value[f+1:]
-            if f in dataTypes:
-                args[value] = dataTypes[f]
+            if f in self.__dataTypes:
+                args[value] = self.__dataTypes[f]
         return args
         
     def addWhereArg(self, arg = "int"):
