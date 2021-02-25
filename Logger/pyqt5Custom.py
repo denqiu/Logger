@@ -138,9 +138,12 @@ class Group(QGroupBox):
         
     def getForm(self):
         return self.__form
+    
+    def checkForm(self):
+        return self.__form is None
         
-    def searchObjects(self, searchForm):
-        if self.__form is None:
+    def searchObjects(self, searchForm = None):
+        if self.checkForm():
             return None
         return self.__form.searchObjects(searchForm)
     
@@ -156,6 +159,8 @@ class Group(QGroupBox):
 class FormLayout(QFormLayout):
     def __init__(self, parent = None):
         self.setForm()
+        self.__isVisible = True
+        self.__isEnabled = True
         super().__init__(parent)
         
     def setForm(self, form = None):
@@ -164,8 +169,17 @@ class FormLayout(QFormLayout):
     def getForm(self):
         return self.__form
     
+    def checkForm(self):
+        return self.__form is None
+    
     def clear(self):
         self.__clearLayout(self)
+        
+    def isVisible(self):
+        return self.__isVisible
+    
+    def isEnabled(self):
+        return self.__isEnabled
     
     def __clearLayout(self, layout):
         if layout is not None:
@@ -175,7 +189,33 @@ class FormLayout(QFormLayout):
                     child.widget().deleteLater()
                 elif not child.layout() is None:
                     self.__clearLayout(child.layout())
-        
+                    
+    def __setLayoutVisibility(self, layout, isVisible):
+        if layout is not None:
+            while layout.count():
+                child = layout.takeAt(0)
+                if not child.widget() is None:
+                    child.widget().setVisible(isVisible)
+                elif not child.layout() is None:
+                    self.__setLayoutVisibility(child.layout(), isVisible)            
+                            
+    def setVisible(self, isVisible):
+        self.__setLayoutVisibility(self, isVisible)
+        self.__isVisible = isVisible
+                           
+    def __setLayoutEnabled(self, layout, isEnabled):
+        if layout is not None:
+            while layout.count():
+                child = layout.takeAt(0)
+                if not child.widget() is None:
+                    child.widget().setEnabled(isEnabled)
+                elif not child.layout() is None:
+                    self.__setLayoutEnabled(child.layout(), isEnabled)            
+                            
+    def setEnabled(self, isEnabled):
+        self.__setLayoutEnabled(self, isEnabled)
+        self.__isEnabled = isEnabled
+                            
 class Form:
     def __init__(self, parent = None):
         self.setParent(parent)
@@ -191,6 +231,40 @@ class Form:
         self.isAddingItems(False)
         self.setRowSize(None)
         self.__rowsAligned = {}
+        self.setFormLayout()
+        
+    def setFormLayout(self, formLayout = FormLayout, *args):
+        self.__formLayout = formLayout
+        self.setFormArguments(*args)
+        
+    def setFormArguments(self, *args):
+        self.__args = list(args)
+        
+    def setVisible(self, isVisible):
+        if not self.__form is None:
+            for r in self.__form:
+                row = self.__form[r]
+                for name in row:
+                    obj = row[name]
+                    obj.setVisible(isVisible)
+        
+    def setEnabled(self, isEnabled):
+        if not self.__form is None:
+            for r in self.__form:
+                row = self.__form[r]
+                for name in row:
+                    obj = row[name]
+                    obj.setVisible(isEnabled)
+                    
+    def isVisible(self):
+        if self.__form is None:
+            return False
+        return self.__layout.isVisible()
+                  
+    def isEnabled(self):
+        if self.__form is None:
+            return False
+        return self.__layout.isEnabled()
         
     def tablelize(self, tablelize):
         self.__tablelize = tablelize
@@ -328,6 +402,9 @@ class Form:
     def addGroup(self, group, font = None):
         return self.__add(group, font, "group")
     
+    def addScrollArea(self, scrollArea):
+        return self.__add(scrollArea, None, "scroll-area")
+    
     def removeObject(self, name):
         if name in self.__row:
             r = self.__row.pop(name)
@@ -389,18 +466,21 @@ class Form:
             return r
         return None
     
-    def searchObjects(self, searchForm):
-        if searchForm.searchAllRows():
-            for r in self.__form:
-                searchForm.search(r, self.__form[r])
+    def searchObjects(self, searchForm = None):
+        if searchForm is None:
+            results = self.__form
         else:
-            for r in searchForm.rows:
-                if r in self.__form:
+            if searchForm.searchAllRows():
+                for r in self.__form:
                     searchForm.search(r, self.__form[r])
-                else:
-                    print("Row {} does not exist".format(r))
-        results = searchForm.results
-        searchForm.__init__()
+            else:
+                for r in searchForm.rows:
+                    if r in self.__form:
+                        searchForm.search(r, self.__form[r])
+                    else:
+                        print("Row {} does not exist".format(r))
+            results = searchForm.results
+            searchForm.__init__()
         return self.searchResults(results)
     
     def mapCustomResults(self, isCustom):
@@ -427,6 +507,10 @@ class Form:
                 return obj.getText().strip()
             elif isinstance(obj, QLabel):
                 return obj.text().strip()
+            elif isinstance(obj, ScrollArea):
+                return obj.getWidgetOrLayout()
+            elif isinstance(obj, QScrollArea):
+                return obj
             else:
                 return None
     
@@ -457,6 +541,9 @@ class Form:
         if self.__layout is None:
             if parent is None:
                 parent = self.__parent
+#             args = [parent]
+#             if len(self.__args) > 0:
+#                 args += self.__args
             form = FormLayout(parent)
             form.setForm(self)
             size = self.newFormRow()
@@ -1123,7 +1210,7 @@ class BoxLayout:
         
     def __method(self, items):
         method = {True: self.__layout.addWidget, False: self.__layout.addLayout}
-        widgets = (QLabel, QGroupBox)
+        widgets = (QLabel, QGroupBox, QScrollArea)
         for i in items:
             b = i
             if not self.__font is None:
@@ -1506,6 +1593,13 @@ class ChildButton(Button):
             self.__button.mouseReleaseEvent(QMouseEvent)
             
 class ScrollBar(QScrollBar):
+    def __init__(self):
+        self.pressed = False
+        QScrollBar.__init__(self)
+        
+    def getScrollArea(self):
+        return self.parent().parent()
+    
     def exists(self):
         if self.isVisible():
             return True
@@ -1515,21 +1609,72 @@ class ScrollBar(QScrollBar):
                     return True
         return False
    
-class ScrollArea(QScrollArea):
-    VERTICAL_SCROLLBAR = "vertical"
-    HORIZONTAL_SCROLLBAR = "horizontal"
+    def mouseRightPressed(self, QMouseEvent):
+        pass
+        
+    def mouseMiddlePressed(self, QMouseEvent):
+        pass
     
-    SCROLL_ON_LEFT_BUTTON = "left_button"
-    SCROLL_ON_MIDDLE_BUTTON = "middle_button"
-    SCROLL_ON_RIGHT_BUTTON = "right_button"
+    def mouseLeftPressed(self, QMouseEvent):
+        self.pressed = True
+        
+    def mousePressed(self, QMouseEvent):       
+        if self.isEnabled():
+            if QMouseEvent.button() == Qt.LeftButton:
+                self.mouseLeftPressed(QMouseEvent)
+            elif QMouseEvent.button() == Qt.MiddleButton:
+                self.mouseMiddlePressed(QMouseEvent)
+            elif QMouseEvent.button() == Qt.RightButton:
+                self.mouseRightPressed(QMouseEvent)
+                
+    def mousePressEvent(self, QMouseEvent):
+        QScrollBar.mousePressEvent(self, QMouseEvent)
+        self.mousePressed(QMouseEvent)
+        
+    def mouseRightReleased(self, QMouseEvent):
+        pass
+        
+    def mouseMiddleReleased(self, QMouseEvent):
+        pass
+    
+    def mouseLeftReleased(self, QMouseEvent):
+        self.pressed = False
 
+    def mouseReleased(self, QMouseEvent):
+        if self.isEnabled():
+            if QMouseEvent.button() == Qt.LeftButton:
+                self.mouseLeftReleased(QMouseEvent)
+            elif QMouseEvent.button() == Qt.MiddleButton:
+                self.mouseMiddleReleased(QMouseEvent)
+            elif QMouseEvent.button() == Qt.RightButton:
+                self.mouseRightReleased(QMouseEvent)
+                
+    def mouseReleaseEvent(self, QMouseEvent):
+        QScrollBar.mouseReleaseEvent(self, QMouseEvent)
+        self.mouseReleased(QMouseEvent)
+        
+class ScrollArea(QScrollArea):   
     def __init__(self, obj, draggable = False, *dragMouseButtons):
         self.setDraggable(draggable, *dragMouseButtons)
+        self.setIncrementBarValue(4)
         super().__init__()
         self.setHorizontalScrollBar(ScrollBar())
         self.setVerticalScrollBar(ScrollBar())
-        self.scrollBars = {self.VERTICAL_SCROLLBAR: self.verticalScrollBar(), self.HORIZONTAL_SCROLLBAR: self.horizontalScrollBar()}
-        self.scrollBarValues = {self.VERTICAL_SCROLLBAR: 0, self.HORIZONTAL_SCROLLBAR: 0}
+        orientation = (Qt.Vertical, Qt.Horizontal)
+        attributes = ("width", "height")
+        bars = (self.verticalScrollBar(), self.horizontalScrollBar())
+        values = (0, 0)
+        arrows = ((Qt.Key_Up, Qt.Key_Down), (Qt.Key_Left, Qt.Key_Right))
+        arrowValues = (-self.getIncrementBarValue(), self.getIncrementBarValue())
+        self.__attributes = dict(zip(orientation, attributes))
+        self.scrollBars = dict(zip(orientation, bars))
+        self.scrollBarValues = dict(zip(orientation, values))
+        arrowKeys = [dict(zip(a, arrowValues)) for a in arrows]
+        self.arrowKeys = dict(zip(orientation, arrowKeys))
+        valueChanges = (self.verticalScrollValueChanged, self.horizontalScrollValueChanged)
+        valueChanges = dict(zip(orientation, valueChanges))
+        for s in self.scrollBars:
+            self.scrollBars[s].valueChanged.connect(valueChanges[s])
         self.setObjectName("scroll-area")
         self.currentIndex = -1
         self.previousButton = None
@@ -1548,6 +1693,30 @@ class ScrollArea(QScrollArea):
         self.setBackground()
         self.installEventFilter(self)
         
+    def setIncrementBarValue(self, value = 1):
+        self.__incrementBarValue = value
+        
+    def getIncrementBarValue(self):
+        return self.__incrementBarValue
+    
+    def getWidgetOrLayout(self):
+        for i in (self.widget(), self.layout()):
+            if not i is None:
+                return i
+        return None
+     
+    def setWidgetOrLayoutVisible(self, isVisible):
+        self.getWidgetOrLayout().setVisible(isVisible)
+        
+    def setWidgetOrLayoutEnabled(self, isEnabled):
+        self.getWidgetOrLayout().setEnabled(isEnabled)
+        
+    def isWidgetOrLayoutVisible(self):
+        return self.getWidgetOrLayout().isVisible()
+
+    def isWidgetOrLayoutEnabled(self):
+        return self.getWidgetOrLayout().isEnabled()
+        
     def setBackground(self):
         s = Style()
         s.setWidget("QWidget#{}".format(self.objectName()))
@@ -1561,11 +1730,11 @@ class ScrollArea(QScrollArea):
     def getMouseButtonsToDragScroll(self):
         return self.__scrollMouseButtons
         
-    def setScrollBarVisibility(self, isVisible, scrollBar = None):
-        attributes = {self.VERTICAL_SCROLLBAR: "width", self.HORIZONTAL_SCROLLBAR: "height"}
-        if not scrollBar is None:
-            if scrollBar in attributes:
-                attributes = {scrollBar: attributes[scrollBar]}
+    def setScrollBarVisibility(self, isVisible, orientation = None):
+        attributes = self.__attributes
+        if not orientation is None:
+            if orientation in attributes:
+                attributes = {orientation: attributes[orientation]}
         for a in attributes:
             self.scrollBars[a].setStyleSheet("" if isVisible else "{}: 0".format(attributes[a]))
                         
@@ -1577,7 +1746,7 @@ class ScrollArea(QScrollArea):
             if len(dragMouseButtons) > 0:
                 self.setMouseButtonsToDragScroll(*dragMouseButtons)
             else:
-                self.setMouseButtonsToDragScroll(self.SCROLL_ON_MIDDLE_BUTTON)
+                self.setMouseButtonsToDragScroll(Qt.MiddleButton)
         else:
             self.setMouseButtonsToDragScroll()
       
@@ -1598,26 +1767,40 @@ class ScrollArea(QScrollArea):
                     
     def setScrollDragged(self, isScrollDragged):
         self.__isScrollDragged = isScrollDragged
+        
+    def horizontalScrollValueChanged(self):
+        return self.__scrollValueChanged(Qt.Horizontal)
+    
+    def verticalScrollValueChanged(self):
+        return self.__scrollValueChanged(Qt.Vertical)
+        
+    def __scrollValueChanged(self, orientation):
+        bar = self.scrollBars[orientation]
+        oldValue, newValue = (self.scrollBarValues[orientation], bar.value())
+        if abs(oldValue-newValue) == 1:
+            self.scrollBarValues[orientation] = newValue
+        return (self.scrollBarValues[orientation], bar)
+    
+    def __checkValueRange(self, value, orientation, bar):
+        if value < bar.minimum():
+            value = bar.minimum()
+        elif value > bar.maximum():
+            value = bar.maximum()
+        self.scrollBarValues[orientation] = value
                     
-    def calculateScrollValue(self, bar, currentPosition, startPosition):
-        getBar = self.scrollBars[bar]
-        value = getBar.value() + (startPosition-currentPosition)
-        if value < getBar.minimum():
-            value = getBar.minimum()
-        elif value > getBar.maximum():
-            value = getBar.maximum()
-        getBar.setValue(value)
-        self.scrollBarValues[bar] = value
-        return (value, getBar)
+    def __calculateScrollValue(self, orientation, currentPosition, startPosition):
+        bar = self.scrollBars[orientation]
+        value = bar.value() + (startPosition-currentPosition)
+        self.__checkValueRange(value, orientation, bar)
         
     def mouseMoveEvent(self, QMouseEvent):
         if self.draggable:
             if not self.startPosition is None:
                 currentPosition = QMouseEvent.pos()
                 if self.verticalScrollBar().exists():
-                    self.calculateScrollValue(self.VERTICAL_SCROLLBAR, currentPosition.y(), self.startPosition.y())
+                    self.__calculateScrollValue(Qt.Vertical, currentPosition.y(), self.startPosition.y())
                 if self.horizontalScrollBar().exists():
-                    self.calculateScrollValue(self.HORIZONTAL_SCROLLBAR, currentPosition.x(), self.startPosition.x())
+                    self.__calculateScrollValue(Qt.Horizontal, currentPosition.x(), self.startPosition.x())
                 if self.__isScrollDragged:
                     self.startPosition = currentPosition
                 else:
@@ -1629,13 +1812,13 @@ class ScrollArea(QScrollArea):
                 self.startPosition = QMouseEvent.pos()
                    
     def mouseRightPressed(self, QMouseEvent):
-        self.__startScroll(QMouseEvent, self.SCROLL_ON_RIGHT_BUTTON)
+        self.__startScroll(QMouseEvent, Qt.RightButton)
         
     def mouseMiddlePressed(self, QMouseEvent):
-        self.__startScroll(QMouseEvent, self.SCROLL_ON_MIDDLE_BUTTON)
+        self.__startScroll(QMouseEvent, Qt.MiddleButton)
     
     def mouseLeftPressed(self, QMouseEvent):
-        self.__startScroll(QMouseEvent, self.SCROLL_ON_LEFT_BUTTON)
+        self.__startScroll(QMouseEvent, Qt.LeftButton)
         
     def mousePressed(self, QMouseEvent):       
         if self.isEnabled():
@@ -1655,13 +1838,13 @@ class ScrollArea(QScrollArea):
                 self.startPosition = None
     
     def mouseRightReleased(self, QMouseEvent):
-        self.__endScroll(self.SCROLL_ON_RIGHT_BUTTON)
+        self.__endScroll(Qt.RightButton)
         
     def mouseMiddleReleased(self, QMouseEvent):
-        self.__endScroll(self.SCROLL_ON_MIDDLE_BUTTON)
+        self.__endScroll(Qt.MiddleButton)
     
     def mouseLeftReleased(self, QMouseEvent):
-        self.__endScroll(self.SCROLL_ON_LEFT_BUTTON)
+        self.__endScroll(Qt.LeftButton)
 
     def mouseReleased(self, QMouseEvent):
         if self.isEnabled():
@@ -1675,6 +1858,29 @@ class ScrollArea(QScrollArea):
     def mouseReleaseEvent(self, QMouseEvent):
         self.mouseReleased(QMouseEvent)
         
+    def __setScrollBarValues(self, QObject, QEvent):
+        for s in self.scrollBars:
+            bar = self.scrollBars[s]
+            if bar.exists():
+                if bar.pressed:
+                    self.__checkValueRange(bar.value(), s, bar)
+                elif type(QEvent) is QKeyEvent:
+                    key = QEvent.key()
+                    if key in self.arrowKeys[s]:
+                        value = self.scrollBarValues[s] + self.arrowKeys[s][key]
+                        self.__checkValueRange(value, s, bar)
+                elif type(QEvent) is QWheelEvent:
+                    if QObject.event(QEvent):
+                        if s == Qt.Vertical:
+                            value = (QEvent.angleDelta().y() // 120) * self.getIncrementBarValue()
+                            value = self.scrollBarValues[s] - value
+                            self.__checkValueRange(value, s, bar)
+                bar.setValue(self.scrollBarValues[s])
+        
+    def eventFilter(self, QObject, QEvent):
+        self.__setScrollBarValues(QObject, QEvent)
+        return QScrollArea.eventFilter(self, QObject, QEvent)
+         
 class ScrollChildButton(Button):
     def __init__(self, index, *text):
         super().__init__(*text)

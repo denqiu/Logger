@@ -1088,7 +1088,7 @@ class QtWorkbenchSql(ParentWindow):
                 self.childForm = f
                 self.childForm.layout()
                 
-            def searchObjects(self, searchForm):
+            def searchObjects(self, searchForm  = None):
                 return self.childForm.searchObjects(searchForm)
             
             def setMessage(self, text, icon = "", iconBackground = None):
@@ -1110,9 +1110,9 @@ class QtWorkbenchSql(ParentWindow):
         def mouseLeftReleased(self, QMouseEvent):
             Button.mouseLeftReleased(self, QMouseEvent)
             if not self.mainWindow is None:
-                self.mainWindow.setChildWindows(self.SetupConnection(self))
-#                 results = {"name": "connect name", "user": "some user", "host": "a host", "connect": "connect"}
-#                 self.scrollForm.addConnection(results)
+#                 self.mainWindow.setChildWindows(self.SetupConnection(self))
+                results = {"name": "connect name", "user": "some user", "host": "a host", "connect": "connect"}
+                self.scrollForm.addConnection(results)
             
     class _Manage(Button):
         def __init__(self, *text):
@@ -1209,7 +1209,7 @@ class QtWorkbenchSql(ParentWindow):
         self.__scrollForm = self._ScrollForm()
         scroll = ScrollArea(self.__scrollForm.group())
         scroll.setDraggable(True)
-        scroll.setScrollBarVisibility(False)
+        #scroll.setScrollBarVisibility(False)
         vbox.addWidget(scroll)
          
     def changeEvent(self, QEvent):

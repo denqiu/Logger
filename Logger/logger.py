@@ -34,7 +34,8 @@ class Action(ChildButton):
         p.end()
         
 class Refresh(Action):
-    def __init__(self):
+    def __init__(self, logger):
+        self.__logger = logger
         Action.__init__(self, "refresh")
         border = self.getText("border")["border"]
         s = Style(border.styleSheet())
@@ -63,11 +64,10 @@ class Refresh(Action):
     def mouseLeftReleased(self, QMouseEvent):
         Action.mouseLeftReleased(self, QMouseEvent)
         if self.checkUsersForm():
-            print("hi refresh")
-#             items = self.__usersForm.getItems()
-#             items.clearForm()
-#             items.newRow()
-#     
+            self.__usersForm.refreshItems()
+        else:
+            self.__logger.refreshLogger()
+            
     def checkUsersForm(self):
         return not self.__usersForm is None
     
@@ -336,53 +336,57 @@ class Header(Button):
     def mouseMiddleReleased(self, QMouseEvent):
         if self.checkUsersScroll():
             self.__usersScroll.mouseMiddleReleased(QMouseEvent)
-            
-# class Users(QHBoxLayout):         
-#     def __init__(self, logger):
-#         QHBoxLayout.__init__(self)
-#         logger.db.query("select get_user(user_id) as user, user_id from user order by user_id")
-#         users = logger.db.results[2]
-#         users = dict([tuple(user.values()) for user in users])
-#         self.userIds = users
-#         self.users = {}
-#         self.items = {}
-#         for user in users:
-#             userBox = QVBoxLayout()
-#             u = Form()
-#             button = User(user, logger)
-#             button.setFont(logger.getFont(16))
-#             if users[user] > 1:
-#                 border = button.getText("border")[0]
-#                 s = Style(border.styleSheet())
-#                 s.setAttribute("border-left", "0")
-#                 border.setStyleSheet(s.css())
-#                 button.addText(border)
-#                 button.addTextToGrid("border")
-#             u.addButton(button).addRow()
-#             self.users[user] = u
-#             userBox.addLayout(u.layout())
-#             items = Form()
-#             items.isAddingItems(True)
-#             items.setRowSize(3)
-#             self.items[user] = items
-#             userBox.addWidget(ScrollArea(items.group()))
-#             self.addLayout(userBox)
-#         self.setSpacing(0)
 
 class Items(Form):
-    def __init__(self, logger):
-        Form.__init__(self, logger)
+    def __init__(self, user, userId, logger):
+        self.__user = user
+        self.__userId = userId
+        self.__logger = logger
+        Form.__init__(self)
+        for i in range(30):
+            self.addLabel("hi"+str(i), self.getFont(12)).addRow()
         self.isAddingItems(True)
         self.setRowSize(4)
+         
+    def refresh(self):
+        print("refreshing", self.__user, ":", self.__userId)
+#         self.clearForm()
+#         self.newRow()
+#         self.setCurrentRow()
+#         for i in range(5):
+#             self.addLabel("hi"+str(i), self.getFont(12))
+        
+    def getUser(self):
+        return self.__user
+
+    def getUserId(self):
+        return self.__userId
     
+class ItemsScroll(ScrollArea):
+    def __init__(self, user, userId, users, logger):
+        self.__user = user
+        self.__userId = userId
+        self.__users = users
+        self.__logger = logger
+        ScrollArea.__init__(self, Items(user, userId, logger).group())
+        self.setObjectName(str(userId))
+        self.setBackground()
+        self.setDraggable(True)
+        self.setScrollBarVisibility(False, Qt.Vertical)
+        
+    def verticalScrollValueChanged(self):
+        value, getBar = ScrollArea.verticalScrollValueChanged(self)
+        print(value)
+        return (value, getBar)
+
 class Users(Form):
     def __init__(self, logger, deliverable):
-        Form.__init__(self, logger)
-        search = SearchForm().searchNames("deliverable", "refresh")
+        self.__logger = logger
+        Form.__init__(self)
+        search = SearchForm().searchNames("deliverable")
         deliverable = deliverable.searchObjects(search).mergeResults().results
-        deliverable, refresh = tuple(deliverable.values())
+        deliverable = tuple(deliverable.values())[0]
         self.__deliverable = deliverable
-        self.__refresh = refresh
         self.tablelize(True)
         logger.db.query("select get_user(user_id) as user, user_id from user order by user_id")
         users = logger.db.results[2]
@@ -392,43 +396,54 @@ class Users(Form):
         self.addRow()
         for u in users:
             self.addButton(Header(u, users[u]), self.getFont(14))
-        self.addRow()        
-        boxLayout = BoxLayout(BoxLayout.ALIGN_VERTICAL, ScrollArea(Items(logger).group()))
-        self.addBoxLayout(boxLayout).addRow()
-
-    def getScroll(self):
-        search = SearchForm().searchClasses(BoxLayout)
-        boxLayout = self.searchObjects(search).mergeResults().results
-        boxLayout = tuple(boxLayout.values())[0]
-        return boxLayout.getItems()[0]
-    
-    def getItems(self):
-        return self.getScroll().widget().getForm()
+        self.addRow() 
+        for u in users:   
+            self.addScrollArea(ItemsScroll(u, users[u], self, logger))
+        self.addRow() 
+         
+    def getItemsScroll(self, *userIds):
+        search = SearchForm().searchClasses(ScrollArea)
+        scrolls = self.searchObjects(search).mergeResults().results
+        u = len(userIds)            
+        if u > 0 and u < len(scrolls):
+            removeIds = [int(s) for s in scrolls]
+            removeIds = list(set(removeIds)-set(userIds))
+            for r in removeIds:
+                scrolls.pop(str(r))
+        return tuple(scrolls.values())
+     
+    def getItems(self, *userIds):
+        return tuple([s.getWidgetOrLayout().getForm() for s in self.getItemsScroll(*userIds)])
+     
+    def refreshItems(self, *userIds):
+        for i in self.getItems(*userIds):
+            i.refresh()
     
     def getUsersScroll(self):
-        return self.layout().parent().parent().parent()
+        return self.getParent()
         
     def setEditorView(self, user, userId):
-        search = SearchForm().searchClasses(Button)
-        buttons = self.searchObjects(search).mergeResults().results
-        buttons = tuple(buttons.values())
-        buttons = [b for b in buttons if not user in b.objectName()]
         if self.__currentLeader.getUserId() != userId:
             if self.__currentLeader.isLeader():
                 self.__leaveLeader()
             else:
                 self.__currentLeader.setLeader(True)
+        search = SearchForm().searchClasses(Button)
+        buttons = self.searchObjects(search).mergeResults().results
+        buttons = tuple(buttons.values())
         for b in buttons:
-            b.setVisible(not b.isVisible())
+            if not user in b.objectName():
+                b.setVisible(not b.isVisible())
+        for s in self.getItemsScroll():
+            if s.objectName() != str(userId):
+                s.setVisible(not s.isVisible())
         self.updateCurrentEditor(userId)
-        self.__refresh.mouseLeftReleased(QMouseEvent)
-        self.__refresh.leave(QMouseEvent)
+        self.refreshItems()
         
     def setCurrentLeaderButton(self, leader):
         self.__currentLeader = leader
-        logger = self.getParent()
-        logger.db.query("select deliverable_id, deliverable from deliverable where user_id = get_current_leader_id()")
-        d = logger.db.results[2][0]
+        self.__logger.db.query("select deliverable_id, deliverable from deliverable where user_id = get_current_leader_id()")
+        d = self.__logger.db.results[2][0]
         num, d = tuple(d.values())
         self.__deliverable.setText("Deliverable #{}: {}".format(num, d))
         
@@ -441,37 +456,37 @@ class Users(Form):
         self.updateCurrentLeader(userId)
     
     def getCurrentLeaderId(self):
-        return self.getParent().getCurrentLeaderId()
+        return self.__logger.getCurrentLeaderId()
   
     def getCurrentEditorId(self):
-        return self.getParent().getCurrentEditorId()
+        return self.__logger.getCurrentEditorId()
   
     def getLastEditorId(self):
-        return self.getParent().getLastEditorId()
+        return self.__logger.getLastEditorId()
   
     def updateCurrentLeader(self, userId):
-        return self.getParent().updateCurrentLeader(userId)
+        return self.__logger.updateCurrentLeader(userId)
         
     def updateCurrentEditor(self, userId):
-        return self.getParent().updateCurrentEditor(userId)
+        return self.__logger.updateCurrentEditor(userId)
         
     def updateLastEditor(self):
-        return self.getParent().updateLastEditor()
+        return self.__logger.updateLastEditor()
         
 class UsersScroll(ScrollArea):
     def __init__(self, users, logger):
         self.__logger = logger
         ScrollArea.__init__(self, users.group())
         self.setDraggable(True)
-        self.setScrollBarVisibility(False, ScrollArea.HORIZONTAL_SCROLLBAR)
-    
-    def calculateScrollValue(self, bar, currentPosition, startPosition):
-        value, _ = ScrollArea.calculateScrollValue(self, bar, currentPosition, startPosition)
+        self.setScrollBarVisibility(False, Qt.Horizontal)
+     
+    def horizontalScrollValueChanged(self):
+        value, getBar = ScrollArea.horizontalScrollValueChanged(self)
         self.__logger.updateHorizontalScroll(value)
-        return value
-    
+        return (value, getBar)
+
     def setHorizontalScrollValue(self):
-        self.scrollBarValues[ScrollArea.HORIZONTAL_SCROLLBAR] = self.__logger.getHorizontalScrollValue()
+        self.scrollBarValues[Qt.Horizontal] = self.__logger.getHorizontalScrollValue()
     
     def checkEditorId(self):
         editorId = self.__logger.getCurrentEditorId()
@@ -490,16 +505,12 @@ class UsersScroll(ScrollArea):
     def mouseReleaseEvent(self, QMouseEvent):
         if self.checkEditorId():
             ScrollArea.mouseReleaseEvent(self, QMouseEvent)
-        
-    def eventFilter(self, QObject, QEvent):
-        self.horizontalScrollBar().setValue(self.scrollBarValues[ScrollArea.HORIZONTAL_SCROLLBAR])
-        return ScrollArea.eventFilter(self, QObject, QEvent)
-        
+
 class Deliverable(Form):
     def __init__(self, logger):
         Form.__init__(self, logger)
         self.addButtonText("", "deliverable", font = self.getFont(18)).addRow(Qt.AlignCenter)
-        self.addButton(Refresh()).addRow(Qt.AlignCenter)
+        self.addButton(Refresh(logger)).addRow(Qt.AlignCenter)
     
 class Logger(ParentWindow):    
     def __init__(self):
@@ -514,18 +525,22 @@ class Logger(ParentWindow):
         
     def checkDb(self):
         return not type(self.db) is str
+    
+    def refreshLogger(self):
+        pass
       
     def setupWindow(self):
         ParentWindow.setupWindow(self)
         self.setWindowTitle("CSC 450 Music Sharing Logger")
         vbox = QVBoxLayout(self)
+        self.__deliverable = Deliverable(self)
         if self.checkDb():
-            self.__deliverable = Deliverable(self)
             self.__users = Users(self, self.__deliverable)
             vbox.addLayout(self.__deliverable.layout())
             self.__usersScroll = UsersScroll(self.__users, self)
             vbox.addWidget(self.__usersScroll)
         else:
+            vbox.addLayout(self.__deliverable.layout())
             error = QLabel(self.db)
             error.setFont(self.getFont(16))
             vbox.addWidget(error)
@@ -556,6 +571,7 @@ class Logger(ParentWindow):
                     while self.__usersScroll.verticalScrollBar().isVisible():
                         self.setMinimumHeight(self.height()+1)
                     self.__usersScroll.setHorizontalScrollValue()
+                    self.__users.setParent(self.__usersScroll)
                 self.__start = False
                 
     def maximizeEvent(self, QEvent):
