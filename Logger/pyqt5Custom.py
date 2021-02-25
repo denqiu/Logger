@@ -1862,18 +1862,19 @@ class ScrollArea(QScrollArea):
     def mouseReleaseEvent(self, QMouseEvent):
         self.mouseReleased(QMouseEvent)
         
+    #Note: Scrollbars will reset their values when mouse cursors strays too far away in traditional scrolling.
     def __setScrollBarValues(self, QObject, QEvent):
         for s in self.scrollBars:
             bar = self.scrollBars[s]
             if bar.exists():
                 value = None
-                if bar.pressed:
+                if bar.pressed: #traditional scrolling
                     value = bar.value()
-                elif type(QEvent) is QKeyEvent:
+                elif type(QEvent) is QKeyEvent: #arrow keys
                     key = QEvent.key()
                     if key in self.arrowKeys[s]:
                         value = self.scrollBarValues[s] + self.arrowKeys[s][key]
-                elif type(QEvent) is QWheelEvent:
+                elif type(QEvent) is QWheelEvent: #mouse wheel and touchpad
                     if QObject.event(QEvent):
                         delta = QEvent.angleDelta()
                         delta = self.__dictOrientation((delta.y(), delta.x()))
