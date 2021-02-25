@@ -1660,19 +1660,20 @@ class ScrollArea(QScrollArea):
         super().__init__()
         self.setHorizontalScrollBar(ScrollBar())
         self.setVerticalScrollBar(ScrollBar())
-        orientation = (Qt.Vertical, Qt.Horizontal)
+        self.__orientation = (Qt.Vertical, Qt.Horizontal)
         attributes = ("width", "height")
         bars = (self.verticalScrollBar(), self.horizontalScrollBar())
         values = (0, 0)
         arrows = ((Qt.Key_Up, Qt.Key_Down), (Qt.Key_Left, Qt.Key_Right))
-        arrowValues = (-self.getIncrementBarValue(), self.getIncrementBarValue())
-        self.__attributes = dict(zip(orientation, attributes))
-        self.scrollBars = dict(zip(orientation, bars))
-        self.scrollBarValues = dict(zip(orientation, values))
-        arrowKeys = [dict(zip(a, arrowValues)) for a in arrows]
-        self.arrowKeys = dict(zip(orientation, arrowKeys))
+        direction = (-self.getIncrementBarValue(), self.getIncrementBarValue())
+        self.__direction = self.__dictOrientation(direction)
+        self.__attributes = self.__dictOrientation(attributes)
+        self.scrollBars = self.__dictOrientation(bars)
+        self.scrollBarValues = self.__dictOrientation(values)
+        arrowKeys = [dict(zip(a, direction)) for a in arrows]
+        self.arrowKeys = self.__dictOrientation(arrowKeys)
         valueChanges = (self.verticalScrollValueChanged, self.horizontalScrollValueChanged)
-        valueChanges = dict(zip(orientation, valueChanges))
+        valueChanges = self.__dictOrientation(valueChanges)
         for s in self.scrollBars:
             self.scrollBars[s].valueChanged.connect(valueChanges[s])
         self.setObjectName("scroll-area")
@@ -1692,6 +1693,9 @@ class ScrollArea(QScrollArea):
         self.setWidgetResizable(True)
         self.setBackground()
         self.installEventFilter(self)
+        
+    def __dictOrientation(self, what):
+        return dict(zip(self.__orientation, what))
         
     def setIncrementBarValue(self, value = 1):
         self.__incrementBarValue = value
@@ -1862,19 +1866,21 @@ class ScrollArea(QScrollArea):
         for s in self.scrollBars:
             bar = self.scrollBars[s]
             if bar.exists():
+                value = None
                 if bar.pressed:
-                    self.__checkValueRange(bar.value(), s, bar)
+                    value = bar.value()
                 elif type(QEvent) is QKeyEvent:
                     key = QEvent.key()
                     if key in self.arrowKeys[s]:
                         value = self.scrollBarValues[s] + self.arrowKeys[s][key]
-                        self.__checkValueRange(value, s, bar)
                 elif type(QEvent) is QWheelEvent:
                     if QObject.event(QEvent):
-                        if s == Qt.Vertical:
-                            value = (QEvent.angleDelta().y() // 120) * self.getIncrementBarValue()
-                            value = self.scrollBarValues[s] - value
-                            self.__checkValueRange(value, s, bar)
+                        delta = QEvent.angleDelta()
+                        delta = self.__dictOrientation((delta.y(), delta.x()))
+                        value = (delta[s] // 120) * self.getIncrementBarValue()
+                        value = self.scrollBarValues[s] + (self.__direction[s]*value)
+                if not value is None:
+                    self.__checkValueRange(value, s, bar)
                 bar.setValue(self.scrollBarValues[s])
         
     def eventFilter(self, QObject, QEvent):
