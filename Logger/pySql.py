@@ -1110,9 +1110,9 @@ class QtWorkbenchSql(ParentWindow):
         def mouseLeftReleased(self, QMouseEvent):
             Button.mouseLeftReleased(self, QMouseEvent)
             if not self.mainWindow is None:
-#                 self.mainWindow.setChildWindows(self.SetupConnection(self))
-                results = {"name": "connect name", "user": "some user", "host": "a host", "connect": "connect"}
-                self.scrollForm.addConnection(results)
+                self.mainWindow.setChildWindows(self.SetupConnection(self))
+#                 results = {"name": "connect name", "user": "some user", "host": "a host", "connect": "connect"}
+#                 self.scrollForm.addConnection(results)
             
     class _Manage(Button):
         def __init__(self, *text):
@@ -1174,7 +1174,7 @@ class QtWorkbenchSql(ParentWindow):
             host.setFixedSize(width, 25)
             c = self.Connect(self.index, name, user, host, ButtonText(attribute="space"))
             self.index += 1
-            c.addBoxLayoutToGrid(BoxLayout(BoxLayout.ALIGN_VERTICAL, "name", "space", "user", "host"), Qt.AlignCenter)  
+            c.addBoxLayoutToGrid(BoxLayout(Qt.Vertical, "name", "space", "user", "host"), Qt.AlignCenter)  
             c.setConnection(results["connect"])
             return c
                  

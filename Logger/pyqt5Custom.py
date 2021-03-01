@@ -405,6 +405,31 @@ class Form:
     def addScrollArea(self, scrollArea):
         return self.__add(scrollArea, None, "scroll-area")
     
+    def addObject(self, obj, font = None):
+        if isinstance(obj, QScrollArea):
+            return self.addScrollArea(obj)
+        elif isinstance(obj, Group):
+            return self.addGroup(obj, font)
+        elif isinstance(obj, CheckBox) or isinstance(obj, QCheckBox):
+            return self.addCheckBox(font = font, checkbox = obj)
+        elif isinstance(obj, QComboBox):
+            return self.addComboBox(obj, font)
+        elif isinstance(obj, Password):
+            return self.addPassword(font = font, password = obj)
+        elif isinstance(obj, TextBox):
+            return self.addTextBox(font = font, textBox = obj)
+        elif isinstance(obj, BoxLayout):
+            return self.addBoxLayout(obj, font)
+        elif isinstance(obj, Button):
+            return self.addButton(obj, font)
+        elif isinstance(obj, ButtonText):
+            return self.addButtonText(font = font, buttonText = obj)
+        elif isinstance(obj, QLabel):
+            return self.addLabel(font = font, label = obj)
+        else:
+            print("This object doesn't exist.")
+            return self
+    
     def removeObject(self, name):
         if name in self.__row:
             r = self.__row.pop(name)
@@ -422,7 +447,7 @@ class Form:
     def setCurrentRow(self, row = None):
         if row is None:
             row = self.formSize()
-        self.__currentRow = BoxLayout(BoxLayout.ALIGN_HORIZONTAL)
+        self.__currentRow = BoxLayout(Qt.Horizontal)
         self.__currentRow.setAttribute(str(row))
         self.__currentRow.setFont(self.__font)
         self.__layout.addRow(self.__currentRow.layout())
@@ -541,15 +566,15 @@ class Form:
         if self.__layout is None:
             if parent is None:
                 parent = self.__parent
-#             args = [parent]
-#             if len(self.__args) > 0:
-#                 args += self.__args
-            form = FormLayout(parent)
+            args = [parent]
+            if len(self.__args) > 0:
+                args += self.__args
+            form = self.__formLayout(*args)
             form.setForm(self)
             size = self.newFormRow()
             for i in range(1, size):
                 row = list(self.__form[i].values())                    
-                h = BoxLayout(BoxLayout.ALIGN_HORIZONTAL, *row)
+                h = BoxLayout(Qt.Horizontal, *row)
                 h.setAttribute(str(i))
                 h.setFont(self.__font)
                 hlay = h.layout()
@@ -557,6 +582,7 @@ class Form:
                     hlay.setAlignment(self.__rowsAligned[i])
                 form.addRow(hlay)
             if self.__tablelize:
+                form.setContentsMargins(0, 0, 0, 0)
                 form.setSpacing(0)
             self.__layout = form
             if self.__isAdding:
@@ -569,7 +595,7 @@ class Form:
         g.setLayout(self.layout(parent))
         return g
     
-class ParentWindow(QWidget):
+class ParentWindow(QWidget): #siblings in progress for both ParentWindow and Window
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.setupWindow()
@@ -672,7 +698,7 @@ class ParentWindow(QWidget):
         elif self.isVisible():
             self.mousePressEvent(QEvent)
                     
-    def mousePressEvent(self, QEvent):
+    def mousePressEvent(self, QMouseEvent):
         self.restoreChildren()
             
     def focusInEvent(self, QEvent):
@@ -1018,7 +1044,7 @@ class Window(QWidget):
             if self.isVisible():
                 self.mousePressEvent(QEvent)
             
-    def mousePressEvent(self, QEvent):
+    def mousePressEvent(self, QMouseEvent):
         self.restoreChildren()
             
     def focusInEvent(self, QEvent):
@@ -1064,6 +1090,7 @@ class Window(QWidget):
 class ButtonText(QLabel):
     def __init__(self, text = "", attribute = "", border = None):
         super().__init__()
+        self.startPosition = None
         self.textBackgroundColor = Qt.black
         self.textClickColor = None
         self.textHoverColor = Qt.white
@@ -1124,7 +1151,7 @@ class ButtonText(QLabel):
             self.__button.mouseMoveEvent(QMouseEvent)
             
     def mouseLeftPressed(self, QMouseEvent):
-        pass
+        self.startPosition = QMouseEvent.pos()
     
     def mouseMiddlePressed(self, QMouseEvent):
         pass
@@ -1148,7 +1175,7 @@ class ButtonText(QLabel):
             self.__button.mousePressEvent(QMouseEvent)
 
     def mouseLeftReleased(self, QMouseEvent):
-        pass
+        self.startPosition = None
     
     def mouseMiddleReleased(self, QMouseEvent):
         pass
@@ -1172,9 +1199,6 @@ class ButtonText(QLabel):
             self.__button.mouseReleaseEvent(QMouseEvent)
 
 class BoxLayout:
-    ALIGN_VERTICAL = "vertical"
-    ALIGN_HORIZONTAL = "horizontal"
-    
     def __init__(self, alignment, *items):
         self.setLayout(alignment)
         self.setItems(*items)
@@ -1192,8 +1216,8 @@ class BoxLayout:
         self.__font = font
         
     def setAttribute(self, attribute = ""):
-        align = {QVBoxLayout: self.ALIGN_VERTICAL, QHBoxLayout: self.ALIGN_HORIZONTAL}[type(self.__layout)]
-        align = {self.ALIGN_VERTICAL: "v", self.ALIGN_HORIZONTAL: "h"}[align]
+        align = {QVBoxLayout: Qt.Vertical, QHBoxLayout: Qt.Horizontal}[type(self.__layout)]
+        align = {Qt.Vertical: "v", Qt.Horizontal: "h"}[align]
         if attribute.strip() != "":
             attribute = "-" + attribute.strip()
         self.__attribute = "{}layout{}".format(align, attribute)
@@ -1203,7 +1227,7 @@ class BoxLayout:
         return self.__attribute
         
     def setLayout(self, alignment):
-        self.__layout = {self.ALIGN_VERTICAL: QVBoxLayout, self.ALIGN_HORIZONTAL: QHBoxLayout}[alignment]()
+        self.__layout = {Qt.Vertical: QVBoxLayout, Qt.Horizontal: QHBoxLayout}[alignment]()
         
     def setItems(self, *items):
         self.__items = list(items)
@@ -1250,6 +1274,7 @@ class BoxLayout:
 class Button(QWidget):
     def __init__(self, *text):
         super().__init__()
+        self.startPosition = None
         self.backgroundColor = Qt.white
         self.clickColor = Qt.gray
         self.hoverColor = Qt.black
@@ -1515,6 +1540,7 @@ class Button(QWidget):
     
     def mouseLeftPressed(self, QMouseEvent):
         self.setColor(self, self.backgroundRole(), self.clickColor)
+        self.startPosition = QMouseEvent.pos()
         
     def mousePressed(self, QMouseEvent):       
         if self.isEnabled():
@@ -1537,6 +1563,7 @@ class Button(QWidget):
     def mouseLeftReleased(self, QMouseEvent):
         self.setColor(self, self.backgroundRole(), self.hoverColor)
         self.setFocus()
+        self.startPosition = None
 
     def mouseReleased(self, QMouseEvent):
         if self.isEnabled():
@@ -1549,7 +1576,13 @@ class Button(QWidget):
                 
     def mouseReleaseEvent(self, QMouseEvent):
         self.mouseReleased(QMouseEvent)
-                
+        
+    def leaveOnScroll(self, QMouseEvent):
+        s = self.startPosition
+        if not s is None:
+            if s != QMouseEvent.pos():
+                self.leave(QMouseEvent)
+                        
 class ChildButton(Button):
     def __init__(self, *text):
         super().__init__(*text)
@@ -1596,7 +1629,7 @@ class ScrollBar(QScrollBar):
     def __init__(self):
         self.pressed = False
         QScrollBar.__init__(self)
-        
+    
     def getScrollArea(self):
         return self.parent().parent()
     
@@ -1657,6 +1690,7 @@ class ScrollArea(QScrollArea):
     def __init__(self, obj, draggable = False, *dragMouseButtons):
         self.setDraggable(draggable, *dragMouseButtons)
         self.setIncrementBarValue(4)
+        self.entered = False
         super().__init__()
         self.setHorizontalScrollBar(ScrollBar())
         self.setVerticalScrollBar(ScrollBar())
@@ -1689,6 +1723,8 @@ class ScrollArea(QScrollArea):
                 if isinstance(obj, lay):
                     isLayout = True
                     break
+            if isinstance(obj, Group):
+                obj.getForm().setParent(self)
             self.setLayout(obj) if isLayout else self.setWidget(obj)
         self.setWidgetResizable(True)
         self.setBackground()
@@ -1721,10 +1757,12 @@ class ScrollArea(QScrollArea):
     def isWidgetOrLayoutEnabled(self):
         return self.getWidgetOrLayout().isEnabled()
         
-    def setBackground(self):
+    def setBackground(self, name = None, color = "white"):
+        if not name is None:
+            self.setObjectName(name)
         s = Style()
         s.setWidget("QWidget#{}".format(self.objectName()))
-        s.setAttribute("background-color", "white")
+        s.setAttribute("background-color", color)
         s.setAttribute("border", "0")
         self.setStyleSheet(s.css())
                         
@@ -1744,13 +1782,13 @@ class ScrollArea(QScrollArea):
                         
     def setDraggable(self, draggable, *dragMouseButtons):
         self.draggable = draggable
-        self.setScrollDragged(draggable)
+        self.__isScrollOwner = draggable
         self.startPosition = None
         if draggable:
             if len(dragMouseButtons) > 0:
                 self.setMouseButtonsToDragScroll(*dragMouseButtons)
             else:
-                self.setMouseButtonsToDragScroll(Qt.MiddleButton)
+                self.setMouseButtonsToDragScroll(Qt.LeftButton)
         else:
             self.setMouseButtonsToDragScroll()
       
@@ -1768,10 +1806,7 @@ class ScrollArea(QScrollArea):
             if not currentButton is self.previousButton:
                 if self.previousButton.entered:
                     self.previousButton.leaveEvent(QMouseEvent)
-                    
-    def setScrollDragged(self, isScrollDragged):
-        self.__isScrollDragged = isScrollDragged
-        
+              
     def horizontalScrollValueChanged(self):
         return self.__scrollValueChanged(Qt.Horizontal)
     
@@ -1796,8 +1831,22 @@ class ScrollArea(QScrollArea):
         bar = self.scrollBars[orientation]
         value = bar.value() + (startPosition-currentPosition)
         self.__checkValueRange(value, orientation, bar)
+                     
+    def enter(self, QMouseEvent):
+        if self.isEnabled():
+            self.entered = True
+            
+    def enterEvent(self, QMouseEvent):
+        self.enter(QMouseEvent)
+                
+    def leave(self, QMouseEvent):  
+        if self.isEnabled():
+            self.entered = False
+            
+    def leaveEvent(self, QMouseEvent):
+        self.leave(QMouseEvent)
         
-    def mouseMoveEvent(self, QMouseEvent):
+    def mouseMove(self, QMouseEvent):
         if self.draggable:
             if not self.startPosition is None:
                 currentPosition = QMouseEvent.pos()
@@ -1805,15 +1854,18 @@ class ScrollArea(QScrollArea):
                     self.__calculateScrollValue(Qt.Vertical, currentPosition.y(), self.startPosition.y())
                 if self.horizontalScrollBar().exists():
                     self.__calculateScrollValue(Qt.Horizontal, currentPosition.x(), self.startPosition.x())
-                if self.__isScrollDragged:
+                if self.__isScrollOwner:
                     self.startPosition = currentPosition
-                else:
-                    self.setScrollDragged(True)
+                    
+    def mouseMoveEvent(self, QMouseEvent):
+        if self.isEnabled():
+            self.mouseMove(QMouseEvent)
     
     def __startScroll(self, QMouseEvent, mouseButton):
         if self.draggable:
             if mouseButton in self.__scrollMouseButtons:
                 self.startPosition = QMouseEvent.pos()
+                self.__isScrollOwner = self.getWidgetOrLayout() is QApplication.widgetAt(QMouseEvent.globalPos())
                    
     def mouseRightPressed(self, QMouseEvent):
         self.__startScroll(QMouseEvent, Qt.RightButton)
@@ -1840,6 +1892,7 @@ class ScrollArea(QScrollArea):
         if self.draggable:
             if mouseButton in self.__scrollMouseButtons:
                 self.startPosition = None
+                self.__isScrollOwner = True
     
     def mouseRightReleased(self, QMouseEvent):
         self.__endScroll(Qt.RightButton)
@@ -1862,7 +1915,7 @@ class ScrollArea(QScrollArea):
     def mouseReleaseEvent(self, QMouseEvent):
         self.mouseReleased(QMouseEvent)
         
-    #Note: Scrollbars will reset their values when mouse cursors strays too far away in traditional scrolling.
+    #Note: Scrollbars will reset their values when mouse cursor strays too far away in traditional scrolling.
     def __setScrollBarValues(self, QObject, QEvent):
         for s in self.scrollBars:
             bar = self.scrollBars[s]
@@ -2036,7 +2089,7 @@ class ArrowButton(ChildButton):
         paint.drawLine(mid, end)
         return paint
              
-    def paintEvent(self, event):
+    def paintEvent(self, QPaintEvent):
         if not self.__start:
             self.__start = True
             self.setColor(self, self.backgroundRole(), self.backgroundColor)
@@ -2063,8 +2116,8 @@ class ComboBox(QComboBox):
             self.currentText = currentText
             self.start = False
             
-        def paintEvent(self, event):
-            Button.paintEvent(self, event)
+        def paintEvent(self, QPaintEvent):
+            Button.paintEvent(self, QPaintEvent)
             if not self.start:
                 self.start = True
                 self.setColor(self, self.backgroundRole(), self.backgroundColor)
@@ -2081,7 +2134,7 @@ class ComboBox(QComboBox):
         def setComboBox(self, comboBox):
             self.comboBox = comboBox
             
-        def showEvent(self, event):
+        def showEvent(self, QEvent):
             if self.isVisible():
                 self.setFixedHeight(self.comboBox.height())
             
@@ -2116,7 +2169,7 @@ class ComboBox(QComboBox):
     def setArrowButton(self, arrow):
         self.__combo.setArrowButton(arrow)
         
-    def showEvent(self, event):
+    def showEvent(self, QEvent):
         if self.isVisible():
             self.__combo.setArrowSize()
         
@@ -2144,7 +2197,7 @@ class CheckIndicator(ChildButton):
         paint.drawLine(mid, end)
         return paint
              
-    def paintEvent(self, event):
+    def paintEvent(self, QPaintEvent):
         p = QPainter()
         p.begin(self)
         color = self.__hover if self.__checked else self.backgroundColor
@@ -2188,7 +2241,7 @@ class CheckBox(Button):
         self.addChildButtons(indicator)
         self.addChildButtonToGrid(indicator.objectName(), Qt.AlignLeft)
         
-    def showEvent(self, event):
+    def showEvent(self, QEvent):
         if self.__start:
             if self.isVisible():
                 self.setFixedWidth(self.width()+self.indicator.width())
@@ -2214,7 +2267,7 @@ class MessageBox(ChildWindow):
     YES_BUTTON = "yes_button"
     NO_BUTTON = "no_button"
     YES_NO_BUTTONS = "yes_no_buttons"
-        
+            
     class _Icon(ChildButton):
         def __init__(self, icon, backgroundColor):
             self.icon = icon
@@ -2271,7 +2324,7 @@ class MessageBox(ChildWindow):
                     self.icon = ""
             return paint
                  
-        def paintEvent(self, event):
+        def paintEvent(self, QPaintEvent):
             p = QPainter()
             p.begin(self)
             p = self.__drawIcon(p)
@@ -2284,7 +2337,7 @@ class MessageBox(ChildWindow):
             self.addTextToGrid(name)
             self.msg = msg
             
-        def showEvent(self, event):
+        def showEvent(self, QEvent):
             if self.isVisible():
                 self.setFixedSize(self.width()+5, self.height()+5)
                  
