@@ -44,7 +44,7 @@ class Refresh(Action):
         self.addText(border)
         self.addTextToGrid("border")
         self.setFixedHeight(30)
-        self.setUsersForm(None)
+        self.setUsers(None)
         self.setObjectName("refresh")
         
     def paint(self, p):
@@ -63,23 +63,232 @@ class Refresh(Action):
     
     def mouseLeftReleased(self, QMouseEvent):
         Action.mouseLeftReleased(self, QMouseEvent)
-        if self.checkUsersForm():
-            self.__usersForm.refreshItems()
+        if self.checkUsers():
+            if self.__users.getCurrentEditorId() > 0:
+                self.__users.refreshItems(self.__users.getCurrentEditorId())
+            else:
+                self.__users.refreshItems()
         else:
             self.__logger.refreshLogger()
             
-    def checkUsersForm(self):
-        return not self.__usersForm is None
+    def checkUsers(self):
+        return not self.__users is None
     
-    def setUsersForm(self, usersForm):
-        self.__usersForm = usersForm
-
-class Leader(Action):
-    def __init__(self, userId):
-        self.setLeader(False)
-        Action.__init__(self, "leader", "Set leader")
+    def setUsers(self, users):
+        self.__users = users
+        
+class ItemCell(ChildButton):
+    def __init__(self, text, column, user, users):
+        self.__users = users
+        self.__user = user
+        self.__column = column
+        text = ButtonText(text, "text")
+        text.setAlignment(Qt.AlignCenter)
+        text.textHoverColor = Qt.white
+        self.__text = text
+        ChildButton.__init__(self, text)
+        textBox = ChildLineBox("som def", message=None)
+        s = Style(textBox.styleSheet())
+        s.setAttribute("background-color", "transparent")
+        s.setAttribute("color", "white")
+        textBox.setStyleSheet(s.css())
+        textBox.setFixedHeight(0)
+        textBox.setAlignment(Qt.AlignCenter)
+        self.__textBox = textBox
+        self.addChildren(textBox)
+        self.addTextToGrid("text", Qt.AlignCenter)
+        self.addChildToGrid(textBox, Qt.AlignCenter)
+        self.setObjectName(str(column))
+        self.installEventFilter(self)
+        
+    def autoSize(self):
+        if self.isVisible():
+            header = self.getUserHeader(self.__column-1)
+            if self.width() != header.width():
+                self.setFixedWidth(header.width())
+                
+    def eventFilter(self, QObject, QEvent):
+        self.autoSize()
+        return ChildButton.eventFilter(self, QObject, QEvent)
+                
+    def getUserHeader(self, column = None):
+        h = self.__users.getHeaders(self.__user)
+        if column is None:
+            return h
+        return h[column]
+    
+    def textFocus(self):
+        return self.__textBox.hasFocus()
+        
+    def enterCell(self):
+        self.__text.setVisible(False)
+        self.__textBox.setFixedHeight(self.height())
+    
+    def leaveCell(self):
+        self.__text.setVisible(True)
+        self.__textBox.deselect()
+        self.__textBox.setFixedHeight(0)
+    
+class Item(ScrollButton):
+    def __init__(self, index, row, itemId, user, users, items):
+        self.__row = row
+        self.__itemId = itemId
+        self.__user = user
+        self.__users = users
+        self.__items = items
+        ScrollButton.__init__(self, index)
+        self.setObjectName("{}_{}".format(user, itemId))
+        cells = {}
+        for i in range(1, 5):
+            cell = self.createCell("hi", i)
+            cells[cell.objectName()] = cell
+        self.addChildren(*list(cells.values()))
+        boxLayout = BoxLayout(Qt.Horizontal, *list(cells.keys()))
+        self.addBoxLayoutToGrid(boxLayout)
+        self.clickColor = None
+        self.hoverColor = Qt.gray
+        self.setFixedHeight(50)
+        
+    def createCell(self, text, column):
+        return ItemCell(text, column, self.__user, self.__users)
+        
+    def getItemsScroll(self):
+        return self.__items.getItemsScroll()
+    
+    def getCells(self, *columns):
+        columns = [str(c) for c in columns]
+        return tuple(self.getChildren("buttons", *columns).values())
+    
+    def checkEditorId(self):
+        return self.__users.getCurrentEditorId() > 0
+    
+    def enter(self, QMouseEvent):
+        if self.checkEditorId():
+            ScrollButton.enter(self, QMouseEvent)
+            for c in self.getCells():
+                c.enterCell()
+            
+    def leave(self, QMouseEvent):
+        if self.checkEditorId():
+            ScrollButton.leave(self, QMouseEvent)
+            for c in self.getCells():
+                c.leaveCell()
+    
+    def mouseMove(self, QMouseEvent):
+        self.getItemsScroll().mouseMove(QMouseEvent)
+            
+    def mouseLeftPressed(self, QMouseEvent):
+        ScrollButton.mouseLeftPressed(self, QMouseEvent)
+        self.getItemsScroll().mouseLeftPressed(QMouseEvent)
+                
+    def mouseLeftReleased(self, QMouseEvent):
+        h = self.hoverColor
+        self.hoverColor = None
+        ScrollButton.mouseLeftReleased(self, QMouseEvent)
+        self.hoverColor = h
+        self.getItemsScroll().mouseLeftReleased(QMouseEvent)
+        
+    def getRow(self):
+        return self.__row
+    
+    def getItemId(self):
+        return self.__itemId
+               
+class Items(Form):
+    def __init__(self, user, userId, users, logger):
+        self.__user = user
         self.__userId = userId
-        self.setUsersFormScroll(None, None)
+        self.__users = users
+        self.__logger = logger
+        self.__index = 1
+        Form.__init__(self)
+        self.tablelize(True)
+        self.queryItems()
+        self.setAddingItems(True).setColumnSize(1)
+        
+    def refresh(self):
+        print("refreshing", self.__user, ":", self.__userId)
+        self.clearForm().newRow()
+        self.queryItems()
+        
+    def createItem(self, itemId):
+        return Item(self.__index, self.newFormRow(), itemId, self.__user, self.__users, self)
+        
+    def queryItems(self):
+        for i in range(1, 31):
+            if self.isAddingItems():
+                self.setCurrentRow()
+            self.addButton(self.createItem(i), self.getFont())
+            self.__index += 1
+            if not self.isAddingItems():
+                self.addRow()
+                
+    def getRows(self, *rowNumbers):
+        if self.formSize() > 0:
+            search = SearchForm().searchClasses(Item)
+            rows = self.searchObjects(search).mergeResults().results
+            rows = tuple(rows.values())
+            if len(rowNumbers) > 0:
+                rows = tuple([r for r in rows if r.getRow() in rowNumbers])
+            return rows
+        return ()
+        
+    def getItemsScroll(self):
+        return self.getParent()
+
+    def getUser(self):
+        return self.__user
+
+    def getUserId(self):
+        return self.__userId
+    
+class ItemsScroll(ScrollArea):
+    def __init__(self, user, userId, users, logger):
+        self.__user = user
+        self.__userId = userId
+        self.__users = users
+        self.__logger = logger
+        ScrollArea.__init__(self, Items(user, userId, users, logger).group())
+        self.setBackground(str(userId))
+        self.setDraggable(True)
+        self.setScrollBarVisibility(False, Qt.Vertical)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+                
+    def verticalScrollValueChanged(self):
+        value, getBar = ScrollArea.verticalScrollValueChanged(self)
+        print(value)
+        return (value, getBar)
+    
+    def getUsersScroll(self):
+        return self.__users.getUsersScroll()
+    
+    def getItems(self):
+        return self.getWidgetOrLayout().getForm()
+    
+    def getUsers(self):
+        return self.__users
+    
+    def mouseMove(self, QMouseEvent):
+        ScrollArea.mouseMove(self, QMouseEvent)
+        self.getUsersScroll().mouseMove(QMouseEvent)
+           
+    def mouseLeftPressed(self, QMouseEvent):
+        ScrollArea.mouseLeftPressed(self, QMouseEvent)
+        self.getUsersScroll().mouseLeftPressed(QMouseEvent)
+               
+    def mouseLeftReleased(self, QMouseEvent):
+        ScrollArea.mouseLeftReleased(self, QMouseEvent)
+        self.getUsersScroll().mouseLeftReleased(QMouseEvent)
+              
+class Leader(Action):
+    def __init__(self, userId, users):
+        self.setLeader(False)
+        self.__userId = userId
+        self.__users = users
+        Action.__init__(self, "leader", "Set leader")
+        if self.checkLeaderId():
+            self.setLeader(True)
+            self.__users.setCurrentLeaderButton(self)
         
     def paint(self, p):
         i, j, k = (18, 5, 2)
@@ -111,7 +320,7 @@ class Leader(Action):
         self.addTextToGrid("border")
     
     def getCurrentLeaderId(self):
-        return self.__usersForm.getCurrentLeaderId()
+        return self.__users.getCurrentLeaderId()
     
     def checkLeaderId(self):
         return self.__userId == self.getCurrentLeaderId()
@@ -124,6 +333,9 @@ class Leader(Action):
     
     def getUserId(self):
         return self.__userId
+    
+    def getUsersScroll(self):
+        return self.__users.getUsersScroll()
        
     def mouseLeftReleased(self, QMouseEvent):
         s = self.startPosition
@@ -131,45 +343,30 @@ class Leader(Action):
         if not self.isLeader():
             if s == QMouseEvent.pos():
                 self.setLeader(True)
-                self.__usersForm.setCurrentLeader(self.__userId)
-                self.__usersForm.setCurrentLeaderButton(self)
-        if self.checkUsersScroll():
-            self.leave(QMouseEvent)
-            self.__usersScroll.mouseLeftReleased(QMouseEvent)
+                self.__users.setCurrentLeader(self.__userId)
+                self.__users.setCurrentLeaderButton(self)
+        self.leave(QMouseEvent)
+        self.getUsersScroll().mouseLeftReleased(QMouseEvent)
         
     def mouseMove(self, QMouseEvent):
-        if self.checkUsersScroll():
-            if not self.isLeader():
-                self.leaveOnScroll(QMouseEvent)
-            self.__usersScroll.mouseMoveEvent(QMouseEvent)
+        if not self.isLeader():
+            self.leaveOnScroll(QMouseEvent)
+        self.getUsersScroll().mouseMoveEvent(QMouseEvent)
         
     def mouseLeftPressed(self, QMouseEvent):
         Action.mouseLeftPressed(self, QMouseEvent)
-        if self.checkUsersScroll():
-            self.__usersScroll.mouseLeftPressed(QMouseEvent)
-            
-    def checkUsersForm(self):
-        return not self.__usersForm is None
-    
-    def checkUsersScroll(self):
-        return not self.__usersScroll is None
-    
-    def setUsersFormScroll(self, usersForm, usersScroll):
-        self.__usersForm = usersForm
-        self.__usersScroll = usersScroll
-        if self.checkUsersForm():
-            if self.checkLeaderId():
-                self.setLeader(True)
-                self.__usersForm.setCurrentLeaderButton(self)
-    
+        self.getUsersScroll().mouseLeftPressed(QMouseEvent)
+          
 class Edit(Action):
-    def __init__(self, user, userId):
+    def __init__(self, user, userId, users):
         self.setClicked(False)
         self.setLeader(None)
         self.__userId = userId
         self.__user = user
-        self.setUsersFormScroll(None, None)
+        self.__users = users
         Action.__init__(self, "edit")
+        if self.checkEditorId():
+            self.setClicked(True)
         
     def setClicked(self, isClicked):
         self.__isClicked = isClicked
@@ -212,7 +409,7 @@ class Edit(Action):
             self.setClicked(False)
             self.setColor(self, self.backgroundRole(), self.hoverColor)
             self.__switchColors()
-            self.__usersForm.setEditorView(self.__user, self.__userId)
+            self.__users.setEditorView(self.__user, self.__userId)
             self.__leader.setEnabled(not self.__leader.isEnabled())
         border = self.getText("border")["border"]
         s = Style(border.styleSheet())
@@ -220,183 +417,94 @@ class Edit(Action):
         border.setStyleSheet(s.css())
         self.addText(border)
         self.addTextToGrid("border")
+        
+    def getUsersScroll(self):
+        return self.__users.getUsersScroll()
        
     def mouseLeftReleased(self, QMouseEvent):
         s = self.startPosition
         Action.mouseLeftReleased(self, QMouseEvent)
         if s == QMouseEvent.pos():
             self.setClicked(True)
-        if self.checkUsersScroll():
-            self.leave(QMouseEvent)
-            self.__usersScroll.mouseLeftReleased(QMouseEvent)
+        self.leave(QMouseEvent)
+        self.getUsersScroll().mouseLeftReleased(QMouseEvent)
         
     def mouseMove(self, QMouseEvent):
-        if self.checkUsersScroll():
-            self.leaveOnScroll(QMouseEvent)
-            self.__usersScroll.mouseMoveEvent(QMouseEvent)
+        self.leaveOnScroll(QMouseEvent)
+        self.getUsersScroll().mouseMoveEvent(QMouseEvent)
         
     def mouseLeftPressed(self, QMouseEvent):
         Action.mouseLeftPressed(self, QMouseEvent)
-        if self.checkUsersScroll():
-            self.__usersScroll.mouseLeftPressed(QMouseEvent)
+        self.getUsersScroll().mouseLeftPressed(QMouseEvent)
            
     def getLastEditorId(self):
-        return self.__usersForm.getLastEditorId()
+        return self.__users.getLastEditorId()
     
     def checkEditorId(self):
         return self.__userId == self.getLastEditorId()
-    
-    def checkUsersForm(self):
-        return not self.__usersForm is None
-    
-    def checkUsersScroll(self):
-        return not self.__usersScroll is None
-    
-    def setUsersFormScroll(self, usersForm, usersScroll):
-        self.__usersForm = usersForm
-        self.__usersScroll = usersScroll
-        if self.checkUsersForm():
-            if self.checkEditorId():
-                self.setClicked(True)
       
-class Items(Form):
-    def __init__(self, user, userId, logger):
-        self.__user = user
-        self.__userId = userId
-        self.__logger = logger
-        Form.__init__(self)
-        
-#         for i in range(60):
-#             item, names = ([], [])
-#             for j in range(4):
-#                 name = "hi"+str(i+j)
-#                 names.append(name)
-#                 t = ButtonText(name, name, border = "1px solid black")
-#                 t.setAlignment(Qt.AlignCenter)
-#                 t.textClickColor = None
-#                 t.textHoverColor = None
-#                 item.append(t)
-#             b = Button(*item)
-#             b.setObjectName("item" + str(i+j))
-#             boxLayout = BoxLayout(Qt.Horizontal, *names)
-#             b.addBoxLayoutToGrid(boxLayout)
-#             b.clickColor = None
-#             b.hoverColor = None
-#             b.setMaximumHeight(60)
-#             self.addButton(b, self.getFont(12)).addRow()
-        self.tablelize(True)
-        self.isAddingItems(True)
-        self.setRowSize(4)
-         
-    def refresh(self):
-        print("refreshing", self.__user, ":", self.__userId)
-        self.clearForm()
-        self.newRow()
-        self.setCurrentRow()
-
-    def getUser(self):
-        return self.__user
-
-    def getUserId(self):
-        return self.__userId
-    
-class ItemsScroll(ScrollArea):
-    def __init__(self, user, userId, users, logger):
-        self.__user = user
-        self.__userId = userId
-        self.__users = users
-        self.__logger = logger
-        ScrollArea.__init__(self, Items(user, userId, logger).group())
-        self.setBackground(str(userId))
-        self.setDraggable(True, Qt.LeftButton)
-        self.setScrollBarVisibility(False, Qt.Vertical)
-        self.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        
-    def verticalScrollValueChanged(self):
-        value, getBar = ScrollArea.verticalScrollValueChanged(self)
-        print(value)
-        return (value, getBar)
-    
-    def getUsersScroll(self):
-        return self.__users.getUsersScroll()
-    
-    def mouseMove(self, QMouseEvent):
-        ScrollArea.mouseMove(self, QMouseEvent)
-        self.getUsersScroll().mouseMoveEvent(QMouseEvent)
-           
-    def mouseLeftPressed(self, QMouseEvent):
-        self.getUsersScroll().mouseLeftPressed(QMouseEvent)
-               
-    def mouseLeftReleased(self, QMouseEvent):
-        self.getUsersScroll().mouseLeftReleased(QMouseEvent)
-              
 class Header(ButtonText):
-    def __init__(self, text, user, userId):
+    def __init__(self, text, user, userId, users):
+        self.__users = users
+        text = " {} ".format(text)
         attribute = "{}_{}_{}".format(text.lower().replace(" ", "_"), user, userId)
         ButtonText.__init__(self, text, attribute, "1px solid black")
         self.setAlignment(Qt.AlignCenter)
         self.textClickColor = None
         self.textHoverColor = None
-        self.setMaximumHeight(30)
+        self.setFixedHeight(35)
+        s = Style()
+        s.setWidget("QLabel")
+        s.setAttribute("background-color", "gray")
+        s.setAttribute("color", "white")
+        s.setAttribute("border", "1px solid black")
+        self.setStyleSheet(s.css())
         
-    def setUsersScroll(self, usersScroll):
-        self.__usersScroll = usersScroll
-        
-    def checkUsersScroll(self):
-        return not self.__usersScroll is None
+    def getUsersScroll(self):
+        return self.__users.getUsersScroll()
 
     def mouseMove(self, QMouseEvent):
-        if self.checkUsersScroll():
-            self.__usersScroll.mouseMoveEvent(QMouseEvent)
+        self.getUsersScroll().mouseMoveEvent(QMouseEvent)
         
     def mouseLeftPressed(self, QMouseEvent):
-        if self.checkUsersScroll():
-            self.__usersScroll.mouseLeftPressed(QMouseEvent)
+        self.getUsersScroll().mouseLeftPressed(QMouseEvent)
             
     def mouseLeftReleased(self, QMouseEvent):
-        if self.checkUsersScroll():
-            self.__usersScroll.mouseLeftReleased(QMouseEvent)
+        self.getUsersScroll().mouseLeftReleased(QMouseEvent)
     
 class User(Button):        
-    def __init__(self, name, userId):
+    def __init__(self, name, userId, users):
+        self.__users = users
         self.__usersScroll = None
         user = ButtonText(name, name)
-        user.textClickColor = None
         user.textHoverColor = None
         space = ButtonText(attribute="space")
         Button.__init__(self, user, space)
         self.setObjectName(name)
-        leader, edit = (Leader(userId), Edit(name, userId))
-        self.addChildButtons(leader, edit)
+        leader, edit = (Leader(userId, users), Edit(name, userId, users))
+        self.addChildren(leader, edit)
         leader.setButton(None)
         edit.setButton(None)
+        edit.setLeader(leader)
         boxLayout = BoxLayout(Qt.Horizontal, name, "space", leader.objectName(), edit.objectName())
         self.addBoxLayoutToGrid(boxLayout, Qt.AlignCenter)
         self.clickColor = None
         self.hoverColor = None
-        self.setMaximumHeight(30) 
-        
-    def setUsersFormScroll(self, usersForm, usersScroll):
-        self.__usersScroll = usersScroll
-        leader, edit = tuple(self.getChildButtons().values())
-        leader.setUsersFormScroll(usersForm, usersScroll)
-        edit.setUsersFormScroll(usersForm, usersScroll)
-        edit.setLeader(leader)
         
     def checkUsersScroll(self):
         return not self.__usersScroll is None
+    
+    def getUsersScroll(self):
+        return self.__users.getUsersScroll()
         
     def mouseMove(self, QMouseEvent):
-        if self.checkUsersScroll():
-            self.__usersScroll.mouseMoveEvent(QMouseEvent)
+        self.getUsersScroll().mouseMoveEvent(QMouseEvent)
         
     def mouseLeftPressed(self, QMouseEvent):
-        if self.checkUsersScroll():
-            self.__usersScroll.mouseLeftPressed(QMouseEvent)
+        self.getUsersScroll().mouseLeftPressed(QMouseEvent)
             
     def mouseLeftReleased(self, QMouseEvent):
-        if self.checkUsersScroll():
-            self.__usersScroll.mouseLeftReleased(QMouseEvent)
+        self.getUsersScroll().mouseLeftReleased(QMouseEvent)
           
 class Users(Form):
     def __init__(self, logger, deliverable):
@@ -411,16 +519,42 @@ class Users(Form):
         users = logger.db.results[2]
         users = dict([tuple(user.values()) for user in users])
         for u in users:
-            self.addButton(User(u, users[u]), self.getFont(16))
+            self.addButton(User(u, users[u], self), self.getFont(16))
         self.addRow()
         headers = ("Start Date", "End Date", "Description", "Time Spent")
         for u in users:
             for h in headers:
-                self.addButtonText(font = self.getFont(12), buttonText = Header(h, u, users[u]))
+                self.addButtonText(font = self.getFont(12), buttonText = Header(h, u, users[u], self))
         self.addRow()
         for u in users:   
             self.addScrollArea(ItemsScroll(u, users[u], self, logger))
         self.addRow() 
+        
+    def getLogger(self):
+        return self.__logger
+        
+    def getUsers(self, *names):
+        search = SearchForm().searchClasses(User)
+        users = self.searchObjects(search).mergeResults().results
+        if len(names) > 0:   
+            u = []
+            for n in names:
+                if n in users:
+                    u.append(users[n])      
+            return tuple(u)
+        return tuple(users.values())
+        
+    def getHeaders(self, *users):
+        search = SearchForm().searchClasses(Header)
+        headers = self.searchObjects(search).mergeResults().results
+        if len(users) > 0:
+            userHead = []
+            for u in users:
+                for h in headers:
+                    if u in h:
+                        userHead.append(headers[h])
+            return tuple(userHead)
+        return tuple(headers.values())
          
     def getItemsScroll(self, *userIds):
         search = SearchForm().searchClasses(ScrollArea)
@@ -457,7 +591,7 @@ class Users(Form):
                 u.setVisible(not u.isVisible())
                 if u.isVisible():
                     if isinstance(u, User):
-                        leader, edit = tuple(u.getChildButtons().values())
+                        leader, edit = tuple(u.getChildren("buttons").values())
                         if not leader.isLeader():
                             leader.leave(QMouseEvent)
                         edit.leave(QMouseEvent)
@@ -513,10 +647,11 @@ class UsersScroll(ScrollArea):
         value, getBar = ScrollArea.horizontalScrollValueChanged(self)
         self.__logger.updateHorizontalScroll(value)
         return (value, getBar)
-
-    def setHorizontalScrollValue(self):
-        self.scrollBarValues[Qt.Horizontal] = self.__logger.getHorizontalScrollValue()
     
+    def defaultHorizontalScrollValue(self):
+        ScrollArea.defaultHorizontalScrollValue(self)
+        return self.__logger.getHorizontalScrollValue()
+
     def checkEditorId(self):
         editorId = self.__logger.getCurrentEditorId()
         if editorId is None:
@@ -544,6 +679,7 @@ class Deliverable(Form):
 class Logger(ParentWindow):    
     def __init__(self):
         app = QApplication(sys.argv)
+        self.__autoSize = False
         try:
             self.db = AccessSql(True, accessType=AccessSql.SSH_ACCESS)
             self.__start = True
@@ -579,7 +715,8 @@ class Logger(ParentWindow):
         if not isMaximized is None:
             if isMaximized:
                 self.showMaximized()
-     
+        self.installEventFilter(self)
+        
     def changeEvent(self, QEvent):
         ParentWindow.changeEvent(self, QEvent)
         if self.isVisible():
@@ -587,28 +724,32 @@ class Logger(ParentWindow):
                 if self.checkDb():
                     search = SearchForm().searchNames("refresh")
                     refresh = self.__deliverable.searchObjects(search).mergeResults().results["refresh"]
-                    refresh.setUsersForm(self.__users)
-                    search = SearchForm().searchClasses(User)
-                    users = self.__users.searchObjects(search).mergeResults().results
-                    users = tuple(users.values())
-                    for u in users:
-                        u.setUsersFormScroll(self.__users, self.__usersScroll)
-                    search = SearchForm().searchClasses(Header)
-                    headers = self.__users.searchObjects(search).mergeResults().results
-                    headers = tuple(headers.values())
-                    for h in headers:
-                        h.setUsersScroll(self.__usersScroll)
-                    items = self.__users.getItems()
-                 
-                    self.__usersScroll.setHorizontalScrollValue()
+                    refresh.setUsers(self.__users)
                 self.__start = False
-                
+                 
+    def eventFilter(self, QObject, QEvent):
+        if self.isVisible():
+            if self.__autoSize:
+                self.__autoSize = False
+                scrolls = self.__users.getItemsScroll()
+                for s in scrolls:
+                    if s.isVisible():
+                        rows = s.getItems().getRows()
+                        if len(rows) > 0:
+                            for r in rows:
+                                cells = r.getCells()
+                                for c in cells:
+                                    c.autoSize()
+        return ParentWindow.eventFilter(self, QObject, QEvent)
+                 
     def maximizeEvent(self, QEvent):
         self.updateWindowStateMaximized(True)
+        self.__autoSize = True
         
     def restoreEvent(self, QEvent):
         self.updateWindowStateMaximized(False)
-                    
+        self.__autoSize = True
+
     def closeEvent(self, QEvent):
         ParentWindow.closeEvent(self, QEvent)
         if self.checkDb():

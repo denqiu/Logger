@@ -1,7 +1,7 @@
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-import re
+import re, sys
 
 class Style:
     def __init__(self, style = ""):
@@ -228,8 +228,8 @@ class Form:
         self.searchResults(None)
         self.__merged = False
         self.__currentRow = None
-        self.isAddingItems(False)
-        self.setRowSize(None)
+        self.setAddingItems(False)
+        self.setColumnSize(None)
         self.__rowsAligned = {}
         self.setFormLayout()
         
@@ -269,17 +269,17 @@ class Form:
     def tablelize(self, tablelize):
         self.__tablelize = tablelize
         return self
-        
-    def setRowSize(self, rowSize):
-        self.__rowSize = rowSize
+    
+    def setColumnSize(self, columnSize):
+        self.__columnSize = columnSize
         return self
         
-    def checkRowSize(self):
-        if self.__currentRow is None or self.__rowSize is None:
+    def checkColumnSize(self):
+        if self.__currentRow is None or self.__columnSize is None:
             return False
-        if self.__rowSize < 0:
+        if self.__columnSize < 0:
             return False
-        return self.__currentRow.size() == self.__rowSize
+        return self.__currentRow.size() == self.__columnSize
         
     def setParent(self, parent = None):
         self.__parent = parent
@@ -302,9 +302,12 @@ class Form:
         self.__row = row
         return self
     
-    def isAddingItems(self, isAdding):
+    def setAddingItems(self, isAdding):
         self.__isAdding = isAdding
         return self
+    
+    def isAddingItems(self):
+        return self.__isAdding
     
     def searchResults(self, results):
         self.results = results
@@ -345,7 +348,7 @@ class Form:
         return obj 
             
     def __add(self, obj, font, *check):
-        if self.checkRowSize():
+        if self.checkColumnSize():
             self.addRow()
         for c in check:
             obj = self.__checkName(obj, c)
@@ -372,7 +375,7 @@ class Form:
         return self.__add(buttonText, font, "text")
     
     def addButton(self, button, font = None):
-        but = {ChildButton: "child-button", ScrollChildButton: "scroll-child-button", ArrowButton: "arrow", Button: "button"}
+        but = {ChildButton: "child-button", ScrollButton: "scroll-button", ArrowButton: "arrow", Button: "button"}
         for b in but:
             if isinstance(button, b):
                 return self.__add(button, font, but[b])
@@ -380,7 +383,12 @@ class Form:
     
     def addBoxLayout(self, boxLayout, font = None):
         return self.__add(boxLayout, font, "vlayout", "hlayout")
-      
+    
+    def addLineBox(self, defaultText = "", message = "", msgIn = True, font = None, lineBox = None): 
+        if lineBox is None:
+            lineBox = LineBox(defaultText, message, msgIn)
+        return self.__add(lineBox, font, "linebox")  
+    
     def addTextBox(self, defaultText = "", message = "", msgIn = True, font = None, textBox = None): 
         if textBox is None:
             textBox = TextBox(defaultText, message, msgIn)
@@ -416,6 +424,8 @@ class Form:
             return self.addComboBox(obj, font)
         elif isinstance(obj, Password):
             return self.addPassword(font = font, password = obj)
+        elif isinstance(obj, LineBox):
+            return self.addLineBox(font = font, lineBox = obj)
         elif isinstance(obj, TextBox):
             return self.addTextBox(font = font, textBox = obj)
         elif isinstance(obj, BoxLayout):
@@ -465,7 +475,7 @@ class Form:
     def addRow(self, alignment = None, font = None):
         row = self.newFormRow()
         if not self.__layout is None:
-            if self.checkRowSize():
+            if self.checkColumnSize():
                 self.setCurrentRow(row)
             else:
                 return self
@@ -524,6 +534,8 @@ class Form:
                 return obj.isChecked()
             if isinstance(obj, QLineEdit):
                 return obj.text().strip()
+            elif isinstance(obj, QTextEdit):
+                return obj.toPlainText().strip()
             elif isinstance(obj, ComboBox):
                 return obj.currentText().strip()
             elif isinstance(obj, Button):
@@ -1123,6 +1135,9 @@ class ButtonText(QLabel):
     def setButton(self, button):
         self.__button = button
         
+    def getButton(self):
+        return self.__button
+        
     def enterText(self, QMouseEvent):
         self.entered = True
             
@@ -1273,6 +1288,21 @@ class BoxLayout:
             
 class Button(QWidget):
     def __init__(self, *text):
+        self.__mod = sys.modules[__name__]
+        self.__childNames = [c for c in dir(self.__mod) if c[:len("Child")] == "Child" and c[-len("Window"):] != "Window"] 
+        self.__childClasses = [getattr(self.__mod, name) for name in self.__childNames]
+        self.__checkChildren = [c.replace("Child", "child-").lower() for c in self.__childNames]
+        self.__childVariables = []
+        for c in self.__checkChildren:
+            c = c.replace("child-", "")
+            if c[-1] == 'x':
+                c += "es"
+            else:
+                c += "s"
+            self.__childVariables.append(c)
+        self.__tagNames = dict(zip(self.__childNames, self.__checkChildren))
+        self.__tagClasses = dict(zip(self.__childClasses, self.__childNames))
+        self.__checks = None
         super().__init__()
         self.startPosition = None
         self.backgroundColor = Qt.white
@@ -1280,35 +1310,61 @@ class Button(QWidget):
         self.hoverColor = Qt.black
         self.entered = False
         self.clearText()
-        self.clearChildButtons()
+        self.clearAllChildren()
         self.addText(ButtonText(border="1px solid black"))
         self.addText(*text)
         self.clearLayout()
         self.__layout[self.__layoutSize()] = {self: (None, 0)}
         self.addTextToGrid("border")
-        self.setObjectName("button")
+        self.setObjectName("button") 
+    
+    def __checkChildClass(self, classObject):
+        for i, c in enumerate(self.__childClasses):
+            if isinstance(classObject, c):
+                return (True, c, self.__childVariables[i])
+        return (False, None, -1)
+        
+    def __objects(self, what = None):
+        objects = [self.__text] + list(self.__children.values())
+        if what is None:
+            return objects
+        else:
+            if what == "classes":
+                objClasses = [ButtonText] + self.__childClasses
+                return dict(zip(objClasses, objects))
+            else:
+                obdict = {}
+                for o in objects:
+                    obdict = {**obdict, **o}
+                if what == "dict":
+                    return obdict
+                elif what == "items":
+                    return tuple(obdict.items())
+                elif what == "keys":
+                    return tuple(obdict.keys())
+                elif what == "values":
+                    return tuple(obdict.values())
         
     def setVisible(self, isVisible):
-        objects = {**self.__text, **self.__buttons}
-        objects = tuple(objects.values())
-        for o in objects:
+        for o in self.__objects("values"):
             o.setVisible(isVisible)
         QWidget.setVisible(self, isVisible)
         
     def setEnabled(self, isEnabled):
-        objects = {**self.__text, **self.__buttons}
-        objects = tuple(objects.values())
-        for o in objects:
+        for o in self.__objects("values"):
             o.setEnabled(isEnabled)
         QWidget.setEnabled(self, isEnabled)
-        
-    def clearText(self):
-        self.__text = {}
-        
+                
     def __checkName(self, obj, check):
         name = obj.objectName()
         if check in name:
-            c = {"text": self.__text, "button": self.__buttons, "child-button": self.__buttons, "scroll-child-button": self.__buttons}
+            if self.__checks is None:
+                c = {"text": self.__text, "button": self.__children["buttons"], "scroll-button": self.__children["buttons"]}
+                checks = tuple(zip(self.__checkChildren, list(self.__children.values())))
+                for (ch, child) in checks:
+                    c[ch] = child
+                self.__checks = c
+            c = self.__checks
             name = [n for n in reversed(c[check].keys()) if not re.search("^"+check+"\d*$", n) is None]
             if not name == []:
                 name = name[0]
@@ -1322,6 +1378,9 @@ class Button(QWidget):
                 obj.setObjectName(name)  
         return obj 
             
+    def clearText(self):
+        self.__text = {}
+        
     def addText(self, *text):
         for t in text:
             if isinstance(t, ButtonText):
@@ -1357,37 +1416,56 @@ class Button(QWidget):
             if t != "border":
                 texts.append(self.__checkObject(text[t]))
         return "\n".join(texts)
-
-    def clearChildButtons(self):
-        self.__buttons = {}
+    
+    def clearAllChildren(self):
+        self.__children = {c: {} for c in self.__childVariables}
         
-    def addChildButtons(self, *children):
+    def clearChildren(self, what):
+        if what in self.__children:
+            self.__checkChildren[what] = {}
+            
+    def addChildren(self, *children):
         for c in children:
-            if isinstance(c, ChildButton):
+            b, cob, key = self.__checkChildClass(c)
+            if b:
                 c.setButton(self)
-                c = self.__checkName(c, "child-button")
-                self.__buttons[c.objectName()] = c
-                
-    def removeChildButtons(self, *children):
+                c = self.__checkName(c, self.__tagNames[self.__tagClasses[cob]])
+                self.__children[key][c.objectName()] = c
+            
+    def removeChildren(self, *children):
         rem = {}
         for c in children:
-            if isinstance(c, ChildButton):
+            b, _, key = self.__checkChildClass(c)
+            if b:
                 c = c.objectName()
-            if c in self.__buttons:
-                rem[c] = self.__buttons.pop(c)
+            if c in self.__children[key]:
+                rem[c] = self.__children[key].pop(c)
             else:
-                print("Child button: {} not found".format(c))
+                if key[-2:] == "es":
+                    k = key[:-2].replace("box", " box")
+                else:
+                    k = key[:-1]
+                print("Child {}: {} not found".format(k, c))
         return rem
+    
+    def getAllChildren(self, *children):
+        allChildren = {}
+        for what in self.__children:
+            allChildren = {**allChildren, **self.getChildren(what, *children)}
+        return allChildren
                 
-    def getChildButtons(self, *children):
+    def getChildren(self, what, *children):
         if len(children) == 0:
-            return self.__buttons
+            if what in self.__children:
+                return self.__children[what]
+            return {}
         else:
-            buttons = {}
-            for b in children:
-                if b in self.__buttons:
-                    buttons[b] = self.__buttons[b]
-            return buttons
+            getChildren = {}
+            for c in children:
+                if what in self.__children:
+                    if c in self.__children[what]:
+                        getChildren[c] = self.__children[what][c]
+            return getChildren
     
     def setFixedSize(self, *args, **kwargs):
         QWidget.setFixedSize(self, *args, **kwargs)
@@ -1408,9 +1486,10 @@ class Button(QWidget):
         for t in self.__text:
             if t != "border":
                 self.__text[t].setFont(*args, **kwargs)
-        for b in self.__buttons:
-            self.__buttons[b].setFont(*args, **kwargs)
-            
+        for obj in self.__objects()[1:]:
+            for o in obj:
+                obj[o].setFont(*args, **kwargs)
+                
     def clearLayout(self):
         self.__layout = {}
         self.__layoutNames = {}
@@ -1418,13 +1497,19 @@ class Button(QWidget):
     def __layoutSize(self):
         return len(self.__layout)+1
     
-    def __checkObject(self, obj, objClass):
-        if isinstance(obj, objClass):
-            obj = obj.objectName()
-        if type(obj) is str:
-            o = {ButtonText: self.__text, ChildButton: self.__buttons}[objClass]
-            if obj in o:
-                return o[obj]
+    def __checkObject(self, obj, objClass = None):
+        if objClass is None:
+            objClasses = self.__objects("classes")
+            objClasses.pop(ButtonText)
+        else:
+            objClasses = [objClass]
+        for objClass in objClasses:
+            if isinstance(obj, objClass):
+                obj = obj.objectName()
+            if type(obj) is str:
+                objects = self.__objects("classes")[objClass]
+                if obj in objects:
+                    return objects[obj]
         return None
     
     def __appendToLayout(self, obj, name, alignment, move, i):
@@ -1439,19 +1524,19 @@ class Button(QWidget):
             print("No ButtonText exists with this attribute")
         else:
             self.__appendToLayout(text, text.objectName(), alignment, move, insert)
-
-    def addChildButtonToGrid(self, childButton, alignment = None, move = 0, insert = None):
-        childButton = self.__checkObject(childButton, ChildButton)
-        if childButton is None:
-            print("No ChildButton exists with this attribute")
+            
+    def addChildToGrid(self, child, alignment = None, move = 0, insert = None):
+        child = self.__checkObject(child)
+        if child is None:
+            print("No Child exists with this attribute")
         else:
-            self.__appendToLayout(childButton, childButton.objectName(), alignment, move, insert)
+            self.__appendToLayout(child, child.objectName(), alignment, move, insert)
             
     def addBoxLayoutToGrid(self, boxLayout, alignment = None, move = 0, insert = None):
         items = boxLayout.getItems()
         for i, b in enumerate(items):
             if type(b) is str:
-                for j in (self.__text, self.__buttons):
+                for j in self.__objects():
                     if b in j:
                         items[i] = j[b]
                         break
@@ -1475,24 +1560,36 @@ class Button(QWidget):
             else:
                 print("{} not found".format(r))
         return rem
+    
+    def __methods(self):
+        g = QGridLayout()
+        objClasses = [type(self), ButtonText, BoxLayout] + self.__childClasses
+        lays = [g.addWidget]*2 + [g.addLayout] * (len(objClasses)-2)
+        methods = dict(zip(objClasses, lays))
+        return (g, methods)        
                                         
     def layout(self):
-        g = QGridLayout()
-        method = {type(self): g.addWidget, ButtonText: g.addWidget, BoxLayout: g.addLayout, ChildButton: g.addLayout}
+        g, methods = self.__methods()
         for i in range(1, self.__layoutSize()):
             b, (align, move) = list(self.__layout[i].items())[0]
             a = b
-            for j in (isinstance(b, BoxLayout), i > 1 and isinstance(b, ChildButton)):
+            layoutChecks = []
+            layoutChecks.append(isinstance(b, BoxLayout))
+            layoutChecks.append(i > 1 and isinstance(b, ChildButton))
+            childClasses = [c for c in self.__childClasses if not c is ChildButton]
+            for child in childClasses:
+                layoutChecks.append(isinstance(b, child))
+            for j in tuple(layoutChecks):
                 if j: 
                     a = a.layout()
                     break
             args = [a, 0, move]
             if not align is None:
                 args.append(align)
-            for m in method:
+            for m in methods:
                 c = isinstance(b, m) if i > 1 else type(b) is m
                 if c:
-                    method[m](*args)
+                    methods[m](*args)
                     break
         return g
         
@@ -1594,6 +1691,9 @@ class ChildButton(Button):
         
     def setButton(self, button):
         self.__button = button
+        
+    def getButton(self):
+        return self.__button
             
     def enterEvent(self, QMouseEvent):
         if self.checkButton():
@@ -1710,6 +1810,9 @@ class ScrollArea(QScrollArea):
         valueChanges = self.__dictOrientation(valueChanges)
         for s in self.scrollBars:
             self.scrollBars[s].valueChanged.connect(valueChanges[s])
+        defaultValues = (self.defaultVerticalScrollValue, self.defaultHorizontalScrollValue)
+        self.__defaultValues = self.__dictOrientation(defaultValues)
+        self.__startDefault = self.__dictOrientation((False, False))
         self.setObjectName("scroll-area")
         self.currentIndex = -1
         self.previousButton = None
@@ -1812,7 +1915,27 @@ class ScrollArea(QScrollArea):
     
     def verticalScrollValueChanged(self):
         return self.__scrollValueChanged(Qt.Vertical)
-        
+    
+    def defaultHorizontalScrollValue(self):
+        h = Qt.Horizontal
+        self.__startDefault[h] = True
+        return self.scrollBarValues[h]
+    
+    def defaultVerticalScrollValue(self):
+        v = Qt.Vertical
+        self.__startDefault[v] = True
+        return self.scrollBarValues[v]
+    
+    def startDefaultValues(self, orientation = None):
+        d = self.__startDefault
+        if not orientation is None:
+            if orientation in d:
+                d = {orientation: d[orientation]}
+        d = tuple(d.keys())
+        for orien in d:
+            self.__startDefault.pop(orien)
+            self.__startDefault[orien] = False
+    
     def __scrollValueChanged(self, orientation):
         bar = self.scrollBars[orientation]
         oldValue, newValue = (self.scrollBarValues[orientation], bar.value())
@@ -1933,6 +2056,8 @@ class ScrollArea(QScrollArea):
                         delta = self.__dictOrientation((delta.y(), delta.x()))
                         value = (delta[s] // 120) * self.getIncrementBarValue()
                         value = self.scrollBarValues[s] + (self.__direction[s]*value)
+                elif not self.__startDefault[s]: #default values
+                    value = self.__defaultValues[s]()
                 if not value is None:
                     self.__checkValueRange(value, s, bar)
                 bar.setValue(self.scrollBarValues[s])
@@ -1941,11 +2066,11 @@ class ScrollArea(QScrollArea):
         self.__setScrollBarValues(QObject, QEvent)
         return QScrollArea.eventFilter(self, QObject, QEvent)
          
-class ScrollChildButton(Button):
+class ScrollButton(Button):
     def __init__(self, index, *text):
         super().__init__(*text)
         self.index = index
-        self.setObjectName("scroll-child-button")
+        self.setObjectName("scroll-button")
         
     def getScrollArea(self):
         p = self.parent()
@@ -1973,11 +2098,181 @@ class ScrollChildButton(Button):
             Button.mouseReleaseEvent(self, QMouseEvent)
         else:
             self.enterEvent(QMouseEvent)
+        
+class LineBox(QLineEdit):
+    class _Message(ButtonText):
+        def __init__(self, message, lineBox):
+            super().__init__(message, "message")
+            self.setAlignment(Qt.AlignLeft)
+            self.setToolTip("")
+            s = Style(self.styleSheet())
+            s.setAttribute("color", "gray" if lineBox.msgIn else "black")
+            self.setStyleSheet(s.css())
+            if lineBox.msgIn:
+                self.setCursor(lineBox.cursor())
+            self.lineBox = lineBox
+        
+        def __getParent(self):
+            p = self.lineBox.parent()
+            while not isinstance(p, QWidget):
+                p = p.parent()
+            return p
             
-class TextBox(QLineEdit):
+        def mouseLeftReleased(self):
+            if self.lineBox.msgIn:
+                self.lineBox.setFocus()
+            else:
+                self.__getParent().mouseReleaseEvent(QMouseEvent)
+        
+    def __init__(self, defaultText = "", message = "", msgIn = True):
+        self.entered = False
+        self.startPosition = None
+        super().__init__()
+        self.msgIn = msgIn
+        self.setMessage(message)
+        if self.checkMessage():
+            self.setObjectName("linebox" if message.strip() == "" else message)
+        else:
+            self.setObjectName("linebox")
+        s = Style()
+        s.setWidget("QLineEdit")
+        s.setAttribute("border", "1px solid black")
+        s.setAttribute("selection-background-color", "black")
+        self.setStyleSheet(s.css())
+        self.textChanged.connect(self.changeText)
+        self.setText(defaultText)
+              
+    def setFont(self, *args, **kwargs):
+        QLineEdit.setFont(self, *args, **kwargs)
+        if self.checkMessage():
+            self.__message.setFont(*args, **kwargs)
+        
+    def setFixedHeight(self, *args, **kwargs):
+        QLineEdit.setFixedHeight(self, *args, **kwargs)
+        if self.checkMessage():
+            self.__message.setFixedHeight(*args, **kwargs)
+
+    def setFixedWidth(self, *args, **kwargs):
+        QLineEdit.setFixedWidth(self, *args, **kwargs)
+        if self.checkMessage():
+            self.__message.setFixedWidth(*args, **kwargs)
+
+    def setFixedSize(self, *args, **kwargs):
+        QLineEdit.setFixedSize(self, *args, **kwargs)
+        if self.checkMessage():
+            self.__message.setFixedSize(*args, **kwargs)
+            
+    def setVisible(self, *args, **kwargs):
+        QLineEdit.setVisible(self, *args, **kwargs)
+        if self.checkMessage():
+            self.__message.setVisible(*args, **kwargs)
+
+    def changeText(self):
+        t = self.text().strip()
+        self.setToolTip(t)
+        if self.msgIn:
+            if self.checkMessage():
+                self.__message.setVisible(t == "")
+            
+    def getMessage(self):
+        return self.__message
+    
+    def checkMessage(self):
+        return not self.__message is None
+    
+    def setMessage(self, message):
+        if not message is None:
+            if not isinstance(message, self._Message):
+                message = self._Message(message, self)
+        self.__message = message
+        
+    def layout(self):
+        if self.msgIn:
+            g = QGridLayout()
+            g.addWidget(self, 0, 0)
+            if self.checkMessage():
+                g.addWidget(self.__message, 0, 0, self.__message.alignment())
+            return g
+        else:
+            h = QHBoxLayout()
+            if self.checkMessage():
+                h.addWidget(self.__message)
+            h.addWidget(self)
+            return h
+                      
+    def enter(self, QMouseEvent):
+        if self.isEnabled():
+            self.entered = True
+       
+    def enterEvent(self, QMouseEvent):
+        QLineEdit.enterEvent(self, QMouseEvent)
+        self.enter(QMouseEvent)
+                
+    def leave(self, QMouseEvent):  
+        if self.isEnabled():
+            self.entered = False
+        
+    def leaveEvent(self, QMouseEvent):
+        QLineEdit.leaveEvent(self, QMouseEvent)
+        self.leave(QMouseEvent)
+        
+    def mouseMove(self, QMouseEvent):
+        pass
+        
+    def mouseMoveEvent(self, QMouseEvent):
+        QLineEdit.mouseMoveEvent(self, QMouseEvent)
+        if self.isEnabled():
+            self.mouseMove(QMouseEvent)
+            
+    def mouseRightPressed(self, QMouseEvent):
+        pass
+    
+    def mouseMiddlePressed(self, QMouseEvent):
+        pass
+    
+    def mouseLeftPressed(self, QMouseEvent):
+        self.startPosition = QMouseEvent.pos()
+        
+    def mousePressed(self, QMouseEvent):       
+        if self.isEnabled():
+            if QMouseEvent.button() == Qt.LeftButton:
+                self.mouseLeftPressed(QMouseEvent)
+            elif QMouseEvent.button() == Qt.MiddleButton:
+                self.mouseMiddlePressed(QMouseEvent)
+            elif QMouseEvent.button() == Qt.RightButton:
+                self.mouseRightPressed(QMouseEvent)
+                
+    def mousePressEvent(self, QMouseEvent):
+        QLineEdit.mousePressEvent(self, QMouseEvent)
+        self.mousePressed(QMouseEvent)
+        
+    def mouseRightReleased(self, QMouseEvent):
+        pass
+    
+    def mouseMiddleReleased(self, QMouseEvent):
+        pass
+    
+    def mouseLeftReleased(self, QMouseEvent):
+        self.startPosition = None
+        
+    def mouseReleased(self, QMouseEvent):
+        if self.isEnabled():
+            if QMouseEvent.button() == Qt.LeftButton:
+                self.mouseLeftReleased(QMouseEvent)
+            elif QMouseEvent.button() == Qt.MiddleButton:
+                self.mouseMiddleReleased(QMouseEvent)
+            elif QMouseEvent.button() == Qt.RightButton:
+                self.mouseRightReleased(QMouseEvent)
+                
+    def mouseReleaseEvent(self, QMouseEvent):
+        QLineEdit.mouseReleaseEvent(self, QMouseEvent)
+        self.mouseReleased(QMouseEvent)
+        
+class TextBox(QTextEdit):
     class _Message(ButtonText):
         def __init__(self, message, textBox):
             super().__init__(message, "message")
+            self.setAlignment(Qt.AlignLeft)
             self.setToolTip("")
             s = Style(self.styleSheet())
             s.setAttribute("color", "gray" if textBox.msgIn else "black")
@@ -1999,40 +2294,308 @@ class TextBox(QLineEdit):
                 self.__getParent().mouseReleaseEvent(QMouseEvent)
         
     def __init__(self, defaultText = "", message = "", msgIn = True):
-        super().__init__()
-        self.setObjectName("textbox" if message.strip() == "" else message)
+        self.entered = False
+        self.startPosition = None
+        super().__init__(defaultText)
+        self.msgIn = msgIn
+        self.setMessage(message)
+        if self.checkMessage():
+            self.setObjectName("textbox" if message.strip() == "" else message)
+        else:
+            self.setObjectName("textbox")
         s = Style()
-        s.setWidget("QLineEdit")
+        s.setWidget("QTextEdit")
         s.setAttribute("border", "1px solid black")
         s.setAttribute("selection-background-color", "black")
         self.setStyleSheet(s.css())
-        self.msgIn = msgIn
-        self.__message = self._Message(message, self)
         self.textChanged.connect(self.changeText)
-        self.setText(defaultText)
+        cursor = self.textCursor()
+        cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(self.toPlainText()))
+        self.setTextCursor(cursor)
               
     def setFont(self, *args, **kwargs):
-        QLineEdit.setFont(self, *args, **kwargs)
-        self.__message.setFont(*args, **kwargs)
+        QTextEdit.setFont(self, *args, **kwargs)
+        if self.checkMessage():
+            self.__message.setFont(*args, **kwargs)
         
+    def setFixedHeight(self, *args, **kwargs):
+        QTextEdit.setFixedHeight(self, *args, **kwargs)
+        if self.checkMessage():
+            self.__message.setFixedHeight(*args, **kwargs)
+
+    def setFixedWidth(self, *args, **kwargs):
+        QTextEdit.setFixedWidth(self, *args, **kwargs)
+        if self.checkMessage():
+            self.__message.setFixedWidth(*args, **kwargs)
+
+    def setFixedSize(self, *args, **kwargs):
+        QTextEdit.setFixedSize(self, *args, **kwargs)
+        if self.checkMessage():
+            self.__message.setFixedSize(*args, **kwargs)
+            
+    def setVisible(self, *args, **kwargs):
+        QTextEdit.setVisible(self, *args, **kwargs)
+        if self.checkMessage():
+            self.__message.setVisible(*args, **kwargs)
+
+    def deselect(self):
+        cursor = self.textCursor()
+        cursor.clearSelection()
+        self.setTextCursor(cursor)
+
     def changeText(self):
-        t = self.text().strip()
+        t = self.toPlainText().strip()
         self.setToolTip(t)
         if self.msgIn:
-            self.__message.setVisible(t == "")
+            if self.checkMessage():
+                self.__message.setVisible(t == "")
+            
+    def getMessage(self):
+        return self.__message
+    
+    def checkMessage(self):
+        return not self.__message is None
+    
+    def setMessage(self, message):
+        if not message is None:
+            if not isinstance(message, self._Message):
+                message = self._Message(message, self)
+        self.__message = message
         
     def layout(self):
         if self.msgIn:
             g = QGridLayout()
             g.addWidget(self, 0, 0)
-            g.addWidget(self.__message, 0, 0, Qt.AlignLeft)
+            if self.checkMessage():
+                g.addWidget(self.__message, 0, 0, self.__message.alignment())
             return g
         else:
             h = QHBoxLayout()
-            h.addWidget(self.__message)
+            if self.checkMessage():
+                h.addWidget(self.__message)
             h.addWidget(self)
             return h
-
+      
+    def enter(self, QMouseEvent):
+        if self.isEnabled():
+            self.entered = True
+       
+    def enterEvent(self, QMouseEvent):
+        QTextEdit.enterEvent(self, QMouseEvent)
+        self.enter(QMouseEvent)
+                
+    def leave(self, QMouseEvent):  
+        if self.isEnabled():
+            self.entered = False
+        
+    def leaveEvent(self, QMouseEvent):
+        QTextEdit.leaveEvent(self, QMouseEvent)
+        self.leave(QMouseEvent)
+        
+    def mouseMove(self, QMouseEvent):
+        pass
+        
+    def mouseMoveEvent(self, QMouseEvent):
+        QTextEdit.mouseMoveEvent(self, QMouseEvent)
+        if self.isEnabled():
+            self.mouseMove(QMouseEvent)
+            
+    def mouseRightPressed(self, QMouseEvent):
+        pass
+    
+    def mouseMiddlePressed(self, QMouseEvent):
+        pass
+    
+    def mouseLeftPressed(self, QMouseEvent):
+        self.startPosition = QMouseEvent.pos()
+        
+    def mousePressed(self, QMouseEvent):       
+        if self.isEnabled():
+            if QMouseEvent.button() == Qt.LeftButton:
+                self.mouseLeftPressed(QMouseEvent)
+            elif QMouseEvent.button() == Qt.MiddleButton:
+                self.mouseMiddlePressed(QMouseEvent)
+            elif QMouseEvent.button() == Qt.RightButton:
+                self.mouseRightPressed(QMouseEvent)
+                
+    def mousePressEvent(self, QMouseEvent):
+        QTextEdit.mousePressEvent(self, QMouseEvent)
+        self.mousePressed(QMouseEvent)
+        
+    def mouseRightReleased(self, QMouseEvent):
+        pass
+    
+    def mouseMiddleReleased(self, QMouseEvent):
+        pass
+    
+    def mouseLeftReleased(self, QMouseEvent):
+        self.startPosition = None
+        
+    def mouseReleased(self, QMouseEvent):
+        if self.isEnabled():
+            if QMouseEvent.button() == Qt.LeftButton:
+                self.mouseLeftReleased(QMouseEvent)
+            elif QMouseEvent.button() == Qt.MiddleButton:
+                self.mouseMiddleReleased(QMouseEvent)
+            elif QMouseEvent.button() == Qt.RightButton:
+                self.mouseRightReleased(QMouseEvent)
+                
+    def mouseReleaseEvent(self, QMouseEvent):
+        QTextEdit.mouseReleaseEvent(self, QMouseEvent)
+        self.mouseReleased(QMouseEvent)
+          
+class ChildLineBox(LineBox):
+    def __init__(self, defaultText="", message="", msgIn=True):
+        LineBox.__init__(self, defaultText, message, msgIn)
+        self.setParentButton(None)
+        self.setButton(None)
+        if self.checkMessage():
+            self.setObjectName("child-linebox" if message.strip() == "" else message)
+        else:
+            self.setObjectName("child-linebox")
+        
+    def checkButton(self):
+        return self.__button is None
+    
+    def checkParentButton(self):
+        return self.__parentButton is None
+    
+    def setParentButton(self, parentButton):
+        self.__parentButton = parentButton
+        
+    def setButton(self, button):
+        self.__button = button
+        if self.checkMessage():
+            self.getMessage().setButton(button)
+        
+    def getButton(self):
+        return self.__button
+    
+    def getParentButton(self):
+        return self.__parentButton
+    
+    def enterEvent(self, QMouseEvent):
+        if self.checkButton():
+            LineBox.enterEvent(self, QMouseEvent)
+        else:
+            self.__button.enterEvent(QMouseEvent)
+            
+    def leave(self, QMouseEvent):
+        LineBox.leave(self, QMouseEvent)
+        self.setButton(self.__parentButton)
+        self.setParentButton(None)
+        if not self.checkButton():
+            self.__button.leaveEvent(QMouseEvent)
+            self.__button.setFocus()
+        
+    def leaveEvent(self, QMouseEvent):
+        if self.checkButton():
+            LineBox.leaveEvent(self, QMouseEvent)
+        else:
+            self.__button.leaveEvent(QMouseEvent)
+            self.__button.setFocus()
+            
+    def mouseMoveEvent(self, QMouseEvent):
+        if self.checkButton():
+            LineBox.mouseMoveEvent(self, QMouseEvent)
+        else:
+            self.__button.mouseMoveEvent(QMouseEvent)
+            
+    def mousePressEvent(self, QMouseEvent):
+        if self.checkButton():
+            LineBox.mousePressEvent(self, QMouseEvent)
+        else:
+            self.startPosition = QMouseEvent.pos()
+            self.__button.mousePressEvent(QMouseEvent)
+            
+    def mouseReleaseEvent(self, QMouseEvent):
+        if self.checkButton():
+            LineBox.mouseReleaseEvent(self, QMouseEvent)
+        else:
+            s = self.startPosition
+            self.__button.mouseReleaseEvent(QMouseEvent)
+            if QMouseEvent.button() == Qt.LeftButton:
+                if s == QMouseEvent.pos():
+                    self.setFocus()
+                    self.setParentButton(self.__button)
+                    self.setButton(None)
+            
+class ChildTextBox(TextBox):
+    def __init__(self, defaultText="", message="", msgIn=True):
+        TextBox.__init__(self, defaultText, message, msgIn)
+        self.setParentButton(None)
+        self.setButton(None)
+        if self.checkMessage():
+            self.setObjectName("child-textbox" if message.strip() == "" else message)
+        else:
+            self.setObjectName("child-textbox")
+        
+    def checkButton(self):
+        return self.__button is None
+    
+    def checkParentButton(self):
+        return self.__parentButton is None
+    
+    def setParentButton(self, parentButton):
+        self.__parentButton = parentButton
+        
+    def setButton(self, button):
+        self.__button = button
+        if self.checkMessage():
+            self.getMessage().setButton(button)
+        
+    def getButton(self):
+        return self.__button
+    
+    def getParentButton(self):
+        return self.__parentButton
+    
+    def enterEvent(self, QMouseEvent):
+        if self.checkButton():
+            TextBox.enterEvent(self, QMouseEvent)
+        else:
+            self.__button.enterEvent(QMouseEvent)
+            
+    def leave(self, QMouseEvent):
+        TextBox.leave(self, QMouseEvent)
+        self.setButton(self.__parentButton)
+        self.setParentButton(None)
+        if not self.checkButton():
+            self.__button.leaveEvent(QMouseEvent)
+            self.__button.setFocus()
+        
+    def leaveEvent(self, QMouseEvent):
+        if self.checkButton():
+            TextBox.leaveEvent(self, QMouseEvent)
+        else:
+            self.__button.leaveEvent(QMouseEvent)
+            self.__button.setFocus()
+            
+    def mouseMoveEvent(self, QMouseEvent):
+        if self.checkButton():
+            TextBox.mouseMoveEvent(self, QMouseEvent)
+        else:
+            self.__button.mouseMoveEvent(QMouseEvent)
+            
+    def mousePressEvent(self, QMouseEvent):
+        if self.checkButton():
+            TextBox.mousePressEvent(self, QMouseEvent)
+        else:
+            self.startPosition = QMouseEvent.pos()
+            self.__button.mousePressEvent(QMouseEvent)
+            
+    def mouseReleaseEvent(self, QMouseEvent):
+        if self.checkButton():
+            TextBox.mouseReleaseEvent(self, QMouseEvent)
+        else:
+            s = self.startPosition
+            self.__button.mouseReleaseEvent(QMouseEvent)
+            if QMouseEvent.button() == Qt.LeftButton:
+                if s == QMouseEvent.pos():
+                    self.setFocus()
+                    self.setParentButton(self.__button)
+                    self.setButton(None)
+            
 class Encode:
     def __init__(self, text):
         self.setText(text)
@@ -2053,7 +2616,7 @@ class Decode:
     def text(self):
         return self.__text
 
-class Password(TextBox):
+class Password(LineBox):
     def __init__(self, defaultText = "", message = "", encode = None):
         if message.strip() == "":
             message = "Password:"
@@ -2061,13 +2624,13 @@ class Password(TextBox):
             message += " Password:"
         super().__init__(defaultText, message, False)
         self.encode = Encode if encode is None else encode
-        self.setEchoMode(TextBox.Password)
+        self.setEchoMode(LineBox.Password)
         
     def setToolTip(self, string):
         return
    
     def text(self):
-        return self.encode(TextBox.text(self)).text()
+        return self.encode(LineBox.text(self)).text()
         
 class ArrowButton(ChildButton):
     def __init__(self):
@@ -2147,6 +2710,8 @@ class ComboBox(QComboBox):
             self.comboBox.showPopup()
         
     def __init__(self, *items):
+        self.entered = False
+        self.startPosition = None
         super().__init__()
         self.setObjectName("combobox")
         s = Style()
@@ -2178,7 +2743,115 @@ class ComboBox(QComboBox):
         g.addWidget(self, 0, 0)
         g.addLayout(self.__combo.layout(), 0, 0)
         return g
+               
+    def enter(self, QMouseEvent):
+        if self.isEnabled():
+            self.entered = True
+       
+    def enterEvent(self, QMouseEvent):
+        self.enter(QMouseEvent)
+                
+    def leave(self, QMouseEvent):  
+        if self.isEnabled():
+            self.entered = False
+        
+    def leaveEvent(self, QMouseEvent):
+        self.leave(QMouseEvent)
+        
+    def mouseMove(self, QMouseEvent):
+        pass
+        
+    def mouseMoveEvent(self, QMouseEvent):
+        if self.isEnabled():
+            self.mouseMove(QMouseEvent)
+            
+    def mouseRightPressed(self, QMouseEvent):
+        pass
     
+    def mouseMiddlePressed(self, QMouseEvent):
+        pass
+    
+    def mouseLeftPressed(self, QMouseEvent):
+        self.startPosition = QMouseEvent.pos()
+        
+    def mousePressed(self, QMouseEvent):       
+        if self.isEnabled():
+            if QMouseEvent.button() == Qt.LeftButton:
+                self.mouseLeftPressed(QMouseEvent)
+            elif QMouseEvent.button() == Qt.MiddleButton:
+                self.mouseMiddlePressed(QMouseEvent)
+            elif QMouseEvent.button() == Qt.RightButton:
+                self.mouseRightPressed(QMouseEvent)
+                
+    def mousePressEvent(self, QMouseEvent):
+        self.mousePressed(QMouseEvent)
+        
+    def mouseRightReleased(self, QMouseEvent):
+        pass
+    
+    def mouseMiddleReleased(self, QMouseEvent):
+        pass
+    
+    def mouseLeftReleased(self, QMouseEvent):
+        self.startPosition = None
+
+    def mouseReleased(self, QMouseEvent):
+        if self.isEnabled():
+            if QMouseEvent.button() == Qt.LeftButton:
+                self.mouseLeftReleased(QMouseEvent)
+            elif QMouseEvent.button() == Qt.MiddleButton:
+                self.mouseMiddleReleased(QMouseEvent)
+            elif QMouseEvent.button() == Qt.RightButton:
+                self.mouseRightReleased(QMouseEvent)
+                
+    def mouseReleaseEvent(self, QMouseEvent):
+        self.mouseReleased(QMouseEvent)
+        
+class ChildComboBox(ComboBox):
+    def __init__(self, *items):
+        ComboBox.__init__(self, *items)
+        self.setButton(None)
+        self.setObjectName("child-combobox")
+        
+    def checkButton(self):
+        return self.__button is None
+        
+    def setButton(self, button):
+        self.__button = button
+        
+    def getButton(self):
+        return self.__button
+            
+    def enterEvent(self, QMouseEvent):
+        if self.checkButton():
+            self.enter(QMouseEvent)
+        else:
+            self.__button.enterEvent(QMouseEvent)
+        
+    def leaveEvent(self, QMouseEvent):
+        if self.checkButton():
+            self.leave(QMouseEvent)
+        else:
+            self.__button.leaveEvent(QMouseEvent)
+            
+    def mouseMoveEvent(self, QMouseEvent):
+        if self.checkButton():
+            self.mouseMove(QMouseEvent)
+        else:
+            self.__button.mouseMoveEvent(QMouseEvent)
+  
+    def mousePressEvent(self, QMouseEvent):
+        if self.checkButton():
+            self.mousePressed(QMouseEvent)
+        else:
+            self.__button.mousePressEvent(QMouseEvent)
+            
+    def mouseReleaseEvent(self, QMouseEvent):
+        if self.checkButton():
+            self.mouseReleased(QMouseEvent)
+        else:
+            self.__button.mouseReleaseEvent(QMouseEvent)
+            
 class CheckIndicator(ChildButton):
     def __init__(self):
         super().__init__()

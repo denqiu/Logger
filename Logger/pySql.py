@@ -1119,7 +1119,7 @@ class QtWorkbenchSql(ParentWindow):
             super().__init__(*text)
                   
     class _ScrollForm(Form):           
-        class Connect(ScrollChildButton):
+        class Connect(ScrollButton):
             def __init__(self, index, *text):
                 self.isMoved = False
                 super().__init__(index, *text)
@@ -1134,28 +1134,26 @@ class QtWorkbenchSql(ParentWindow):
                 
             def mouseMove(self, QMouseEvent):
                 if self.checkScrollArea():
-                    self.getScrollArea().setScrollDragged(False)
                     self.getScrollArea().mouseMoveEvent(QMouseEvent)
                 
-            def mouseMiddlePressed(self, QMouseEvent):
-                ScrollChildButton.mouseMiddlePressed(self, QMouseEvent)
+            def mouseLeftPressed(self, QMouseEvent):
+                ScrollButton.mouseLeftPressed(self, QMouseEvent)
                 if self.checkScrollArea():
-                    self.getScrollArea().mouseMiddlePressed(QMouseEvent)
+                    self.getScrollArea().mouseLeftPressed(QMouseEvent)
                  
             def mouseLeftReleased(self, QMouseEvent):
-                ScrollChildButton.mouseLeftReleased(self, QMouseEvent)
-                print(self.connect)
-                
-            def mouseMiddleReleased(self, QMouseEvent):
-                ScrollChildButton.mouseMiddleReleased(self, QMouseEvent)
+                s = self.startPosition
+                ScrollButton.mouseLeftReleased(self, QMouseEvent)
+                if s == QMouseEvent.pos():
+                    print(self.connect)
                 if self.checkScrollArea():
-                    self.getScrollArea().mouseMiddleReleased(QMouseEvent)
+                    self.getScrollArea().mouseLeftReleased(QMouseEvent)
                     
         def __init__(self):
             self.index = 1
             super().__init__()
             self.connectionNames = []
-            self.isAddingItems(True).setRowSize(6)
+            self.setAddingItems(True).setColumnSize(6)
                         
         def addConnection(self, results):
             self.addButton(self.connection(results))
