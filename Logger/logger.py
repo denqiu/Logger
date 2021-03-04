@@ -350,7 +350,7 @@ class Leader(Action):
         
     def mouseMove(self, QMouseEvent):
         if not self.isLeader():
-            self.leaveOnScroll(QMouseEvent)
+            self.leaveOnMove(QMouseEvent)
         self.getUsersScroll().mouseMoveEvent(QMouseEvent)
         
     def mouseLeftPressed(self, QMouseEvent):
@@ -430,7 +430,7 @@ class Edit(Action):
         self.getUsersScroll().mouseLeftReleased(QMouseEvent)
         
     def mouseMove(self, QMouseEvent):
-        self.leaveOnScroll(QMouseEvent)
+        self.leaveOnMove(QMouseEvent)
         self.getUsersScroll().mouseMoveEvent(QMouseEvent)
         
     def mouseLeftPressed(self, QMouseEvent):

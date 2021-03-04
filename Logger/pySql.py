@@ -947,7 +947,7 @@ class QtWorkbenchSql(ParentWindow):
                 def testConnection(self, isAccess = False):
                     comboBox = self.comboBox
                     group, access, _ = comboBox.items[comboBox.currentText()]                    
-                    results = group.searchObjects(SearchForm().searchClasses(TextBox)).mergeResults().resultValues().results
+                    results = group.searchObjects(SearchForm().searchClasses(LineBox)).mergeResults().resultValues().results
                     keys = tuple(results.keys())
                     for r in keys:
                         if "schema" in r:
@@ -1046,23 +1046,23 @@ class QtWorkbenchSql(ParentWindow):
                 self.mainWindow.setEnabled(False)
                 g = Form()
                 g.setFont(self.getFont())
-                g.addTextBox("127.0.0.1", "Host name:", False).addRow()
-                g.addTextBox("root", "Username:", False).addRow()
+                g.addLineBox("127.0.0.1", "Host name:", False).addRow()
+                g.addLineBox("root", "Username:", False).addRow()
                 g.addPassword().addRow()
-                g.addTextBox(message="Enter default schema name (Optional)").addRow() 
+                g.addLineBox(message="Enter default schema name (Optional)").addRow() 
                 self.standard = g.group() 
                 g = Form()
                 g.setFont(self.getFont())
-                g.addTextBox("127.0.0.1", "SSH Host name:", False).addRow()
-                g.addTextBox("user", "SSH Username:", False).addRow()
+                g.addLineBox("127.0.0.1", "SSH Host name:", False).addRow()
+                g.addLineBox("user", "SSH Username:", False).addRow()
                 g.addPassword(message="SSH").addRow()
-                g.addTextBox("root", "MySql Username:", False).addRow()
+                g.addLineBox("root", "MySql Username:", False).addRow()
                 g.addPassword(message="MySql").addRow()
-                g.addTextBox(message="Enter MySql default schema name (Optional)").addRow()
+                g.addLineBox(message="Enter MySql default schema name (Optional)").addRow()
                 self.standardSSH = g.group()
                 f = Form(self)
                 f.setFont(self.getFont())
-                f.addTextBox(message="Enter a connection name").addRow()
+                f.addLineBox(message="Enter a connection name").addRow()
                 f.addLabel("Connection method:")
                 c = self.Combo(self)
                 f.addComboBox(c).addRow()

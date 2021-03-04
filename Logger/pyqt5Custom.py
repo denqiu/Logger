@@ -1289,7 +1289,12 @@ class BoxLayout:
 class Button(QWidget):
     def __init__(self, *text):
         self.__mod = sys.modules[__name__]
-        self.__childNames = [c for c in dir(self.__mod) if c[:len("Child")] == "Child" and c[-len("Window"):] != "Window"] 
+        ignores = ("Window", "Password")
+        self.__childNames = []
+        for c in dir(self.__mod):
+            if c[:len("Child")] == "Child":
+                if not c[len("Child"):] in ignores:              
+                    self.__childNames.append(c)
         self.__childClasses = [getattr(self.__mod, name) for name in self.__childNames]
         self.__checkChildren = [c.replace("Child", "child-").lower() for c in self.__childNames]
         self.__childVariables = []
@@ -1674,7 +1679,7 @@ class Button(QWidget):
     def mouseReleaseEvent(self, QMouseEvent):
         self.mouseReleased(QMouseEvent)
         
-    def leaveOnScroll(self, QMouseEvent):
+    def leaveOnMove(self, QMouseEvent):
         s = self.startPosition
         if not s is None:
             if s != QMouseEvent.pos():
@@ -2118,7 +2123,7 @@ class LineBox(QLineEdit):
                 p = p.parent()
             return p
             
-        def mouseLeftReleased(self):
+        def mouseLeftReleased(self, QMouseEvent):
             if self.lineBox.msgIn:
                 self.lineBox.setFocus()
             else:
@@ -2287,7 +2292,7 @@ class TextBox(QTextEdit):
                 p = p.parent()
             return p
             
-        def mouseLeftReleased(self):
+        def mouseLeftReleased(self, QMouseEvent):
             if self.textBox.msgIn:
                 self.textBox.setFocus()
             else:
@@ -2507,6 +2512,7 @@ class ChildLineBox(LineBox):
         else:
             self.startPosition = QMouseEvent.pos()
             self.__button.mousePressEvent(QMouseEvent)
+            self.__button.setFocus()
             
     def mouseReleaseEvent(self, QMouseEvent):
         if self.checkButton():
@@ -2583,6 +2589,7 @@ class ChildTextBox(TextBox):
         else:
             self.startPosition = QMouseEvent.pos()
             self.__button.mousePressEvent(QMouseEvent)
+            self.__button.setFocus()
             
     def mouseReleaseEvent(self, QMouseEvent):
         if self.checkButton():
@@ -2632,6 +2639,22 @@ class Password(LineBox):
     def text(self):
         return self.encode(LineBox.text(self)).text()
         
+class ChildPassword(ChildLineBox):
+    def __init__(self, defaultText = "", message = "", encode = None):
+        if message.strip() == "":
+            message = "Password:"
+        else:
+            message += " Password:"
+        super().__init__(defaultText, message, False)
+        self.encode = Encode if encode is None else encode
+        self.setEchoMode(ChildLineBox.Password)
+        
+    def setToolTip(self, string):
+        return
+   
+    def text(self):
+        return self.encode(ChildLineBox.text(self)).text()
+    
 class ArrowButton(ChildButton):
     def __init__(self):
         super().__init__()
@@ -2689,10 +2712,10 @@ class ComboBox(QComboBox):
             if arrow is None:
                 arrow = ArrowButton()
             arrow.setComboBox(self.comboBox)
-            self.addChildButtons(arrow)
+            self.addChildren(arrow)
             arrow.setButton(None)
             self.arrow = arrow
-            self.addChildButtonToGrid(arrow.objectName(), Qt.AlignRight)
+            self.addChildToGrid(arrow.objectName(), Qt.AlignRight)
             
         def setComboBox(self, comboBox):
             self.comboBox = comboBox
@@ -2911,8 +2934,8 @@ class CheckBox(Button):
         if indicator is None:
             indicator = CheckIndicator()
         self.indicator = indicator
-        self.addChildButtons(indicator)
-        self.addChildButtonToGrid(indicator.objectName(), Qt.AlignLeft)
+        self.addChildren(indicator)
+        self.addChildToGrid(indicator.objectName(), Qt.AlignLeft)
         
     def showEvent(self, QEvent):
         if self.__start:
@@ -2922,7 +2945,7 @@ class CheckBox(Button):
         
     def mouseLeftReleased(self, QMouseEvent):
         Button.mouseLeftReleased(self, QMouseEvent)
-        self.indicator.mouseLeftReleased()
+        self.indicator.mouseLeftReleased(QMouseEvent)
          
     def isChecked(self):
         return self.indicator.isChecked()
