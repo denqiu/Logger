@@ -78,34 +78,35 @@ class Refresh(Action):
         self.__users = users
         
 class ItemCell(ChildButton):
-    def __init__(self, text, column, user, users):
+    def __init__(self, text, child, column, user, users):
         self.__users = users
         self.__user = user
         self.__column = column
-        text = ButtonText(text, "text")
-        text.setAlignment(Qt.AlignCenter)
-        text.textHoverColor = Qt.white
-        self.__text = text
-        ChildButton.__init__(self, text)
-        textBox = ChildLineBox("som def", message=None)
-        s = Style(textBox.styleSheet())
+        buttonText = ButtonText(text, "text")
+        buttonText.setAlignment(Qt.AlignCenter)
+        buttonText.textHoverColor = Qt.white
+        self.__buttonText = buttonText
+        ChildButton.__init__(self, buttonText)
+        child = child(text)
+        child.setFixedHeight(0)
+        s = Style(child.styleSheet())
         s.setAttribute("background-color", "transparent")
         s.setAttribute("color", "white")
-        textBox.setStyleSheet(s.css())
-        textBox.setFixedHeight(0)
-        textBox.setAlignment(Qt.AlignCenter)
-        self.__textBox = textBox
-        self.addChildren(textBox)
+        child.setStyleSheet(s.css())
+        self.__child = child
+        self.addChildren(child)
         self.addTextToGrid("text", Qt.AlignCenter)
-        self.addChildToGrid(textBox, Qt.AlignCenter)
+        self.addChildToGrid(child, Qt.AlignCenter)
         self.setObjectName(str(column))
         self.installEventFilter(self)
         
     def autoSize(self):
         if self.isVisible():
-            header = self.getUserHeader(self.__column-1)
-            if self.width() != header.width():
-                self.setFixedWidth(header.width())
+            width = self.getUserHeader(self.__column-1).width()
+            if self.width() != width:
+                self.setFixedWidth(width)
+                self.__buttonText.setFixedWidth(width)
+                self.__child.setFixedWidth(width)
                 
     def eventFilter(self, QObject, QEvent):
         self.autoSize()
@@ -117,17 +118,42 @@ class ItemCell(ChildButton):
             return h
         return h[column]
     
-    def textFocus(self):
-        return self.__textBox.hasFocus()
-        
+    def mousePressEvent(self, QMouseEvent):
+        ChildButton.mousePressEvent(self, QMouseEvent)
+
     def enterCell(self):
-        self.__text.setVisible(False)
-        self.__textBox.setFixedHeight(self.height())
+        self.__buttonText.setVisible(False)
+        self.__child.setFixedHeight(self.height())
     
     def leaveCell(self):
-        self.__text.setVisible(True)
-        self.__textBox.deselect()
-        self.__textBox.setFixedHeight(0)
+        self.__buttonText.setVisible(True)
+        self.__child.leaveCell()
+        self.__child.setFixedHeight(0)
+        self.__buttonText.setText(self.__child.result())
+        
+class Description(ChildLineBox):
+    def __init__(self, text):
+        ChildLineBox.__init__(self, text, message=None)
+        self.setAlignment(Qt.AlignCenter)
+        
+    def leaveCell(self):
+        self.deselect()
+        
+    def result(self):
+        return self.text()
+    
+class TimeSpent(ChildComboBox):
+    def __init__(self, text):
+        ChildComboBox.__init__(self, text)
+        self.setCurrentText(text)
+        self.setArrowButton(None)
+        #self.getCombo().backgroundColor = Qt.transparent
+        
+    def leaveCell(self):
+        pass
+    
+    def result(self):
+        return self.currentText()
     
 class Item(ScrollButton):
     def __init__(self, index, row, itemId, user, users, items):
@@ -150,7 +176,7 @@ class Item(ScrollButton):
         self.setFixedHeight(50)
         
     def createCell(self, text, column):
-        return ItemCell(text, column, self.__user, self.__users)
+        return ItemCell(text, TimeSpent, column, self.__user, self.__users)
         
     def getItemsScroll(self):
         return self.__items.getItemsScroll()
@@ -256,9 +282,17 @@ class ItemsScroll(ScrollArea):
                 
     def verticalScrollValueChanged(self):
         value, getBar = ScrollArea.verticalScrollValueChanged(self)
-        print(value)
+        self.synchronizeScrolls(value)
         return (value, getBar)
     
+    def synchronizeScrolls(self, value):
+        if self.__users.getCurrentEditorId() < 1:
+            for s in self.__users.getItemsScroll():
+                if not s is self:
+                    v = Qt.Vertical
+                    s.scrollBarValues[v] = value
+                    s.scrollBars[v].setValue(value)
+         
     def getUsersScroll(self):
         return self.__users.getUsersScroll()
     

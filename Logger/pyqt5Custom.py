@@ -1364,13 +1364,9 @@ class Button(QWidget):
         name = obj.objectName()
         if check in name:
             if self.__checks is None:
-                c = {"text": self.__text, "button": self.__children["buttons"], "scroll-button": self.__children["buttons"]}
-                checks = tuple(zip(self.__checkChildren, list(self.__children.values())))
-                for (ch, child) in checks:
-                    c[ch] = child
-                self.__checks = c
-            c = self.__checks
-            name = [n for n in reversed(c[check].keys()) if not re.search("^"+check+"\d*$", n) is None]
+                checks = dict(zip(self.__checkChildren, list(self.__children.values())))
+                self.__checks = {**{"text": self.__text}, **checks}
+            name = [n for n in reversed(self.__checks[check].keys()) if not re.search("^"+check+"\d*$", n) is None]
             if not name == []:
                 name = name[0]
                 s = re.search(check+"(\d*)", name)
@@ -2043,6 +2039,9 @@ class ScrollArea(QScrollArea):
     def mouseReleaseEvent(self, QMouseEvent):
         self.mouseReleased(QMouseEvent)
         
+    def valueToSet(self, orientation):
+        return self.scrollBarValues[orientation]
+        
     #Note: Scrollbars will reset their values when mouse cursor strays too far away in traditional scrolling.
     def __setScrollBarValues(self, QObject, QEvent):
         for s in self.scrollBars:
@@ -2065,7 +2064,7 @@ class ScrollArea(QScrollArea):
                     value = self.__defaultValues[s]()
                 if not value is None:
                     self.__checkValueRange(value, s, bar)
-                bar.setValue(self.scrollBarValues[s])
+                bar.setValue(self.valueToSet(s))
         
     def eventFilter(self, QObject, QEvent):
         self.__setScrollBarValues(QObject, QEvent)
@@ -2317,6 +2316,7 @@ class TextBox(QTextEdit):
         cursor = self.textCursor()
         cursor.movePosition(QTextCursor.Right, QTextCursor.KeepAnchor, len(self.toPlainText()))
         self.setTextCursor(cursor)
+        self.deselect()
               
     def setFont(self, *args, **kwargs):
         QTextEdit.setFont(self, *args, **kwargs)
@@ -2625,36 +2625,38 @@ class Decode:
 
 class Password(LineBox):
     def __init__(self, defaultText = "", message = "", encode = None):
-        if message.strip() == "":
-            message = "Password:"
-        else:
-            message += " Password:"
-        super().__init__(defaultText, message, False)
+        if not message is None:
+            if message.strip() == "":
+                message = "Password:"
+            else:
+                message += " Password:"
         self.encode = Encode if encode is None else encode
+        super().__init__(defaultText, message, False)
         self.setEchoMode(LineBox.Password)
-        
-    def setToolTip(self, string):
-        return
-   
+    
+    def setToolTip(self, toolTip):
+        pass
+     
     def text(self):
         return self.encode(LineBox.text(self)).text()
         
 class ChildPassword(ChildLineBox):
     def __init__(self, defaultText = "", message = "", encode = None):
-        if message.strip() == "":
-            message = "Password:"
-        else:
-            message += " Password:"
-        super().__init__(defaultText, message, False)
+        if not message is None:
+            if message.strip() == "":
+                message = "Password:"
+            else:
+                message += " Password:"
         self.encode = Encode if encode is None else encode
+        super().__init__(defaultText, message, False)
         self.setEchoMode(ChildLineBox.Password)
-        
-    def setToolTip(self, string):
-        return
-   
+         
+    def setToolTip(self, toolTip):
+        pass
+     
     def text(self):
         return self.encode(ChildLineBox.text(self)).text()
-    
+     
 class ArrowButton(ChildButton):
     def __init__(self):
         super().__init__()
@@ -2687,36 +2689,41 @@ class ArrowButton(ChildButton):
         p.end()
         
     def mouseLeftReleased(self, QMouseEvent):
+        s = self.startPosition
         ChildButton.mouseLeftReleased(self, QMouseEvent)
         if not self.__combobox is None:
-            self.__combobox.showPopup()
+            if s == QMouseEvent.pos():
+                self.__combobox.showPopup()
 
 class ComboBox(QComboBox):
-    class _Combo(Button):
+    class _Combo(ChildButton):
         def __init__(self, comboBox):
             currentText = ButtonText(attribute="combo")
+            self.arrow = None
             super().__init__(currentText)
             self.addTextToGrid("combo")
             self.setComboBox(comboBox)
-            self.setArrowButton()
+            self.setArrowButton(ArrowButton())
             self.currentText = currentText
             self.start = False
-            
+        
         def paintEvent(self, QPaintEvent):
-            Button.paintEvent(self, QPaintEvent)
+            ChildButton.paintEvent(self, QPaintEvent)
             if not self.start:
                 self.start = True
                 self.setColor(self, self.backgroundRole(), self.backgroundColor)
+                
+        def checkArrow(self):
+            return not self.arrow is None
               
-        def setArrowButton(self, arrow = None):
-            if arrow is None:
-                arrow = ArrowButton()
-            arrow.setComboBox(self.comboBox)
-            self.addChildren(arrow)
-            arrow.setButton(None)
-            self.arrow = arrow
-            self.addChildToGrid(arrow.objectName(), Qt.AlignRight)
-            
+        def setArrowButton(self, arrow):
+            if not arrow is None:
+                arrow.setComboBox(self.comboBox)
+                self.addChildren(arrow)
+                arrow.setButton(None)
+                self.arrow = arrow
+                self.addChildToGrid(arrow.objectName(), Qt.AlignRight)
+                
         def setComboBox(self, comboBox):
             self.comboBox = comboBox
             
@@ -2725,13 +2732,57 @@ class ComboBox(QComboBox):
                 self.setFixedHeight(self.comboBox.height())
             
         def setArrowSize(self):
-            h = self.height()
-            self.arrow.setFixedSize(h, h)      
-              
+            if self.checkArrow():
+                h = self.height()
+                self.arrow.setFixedSize(h, h)      
+            
+        def enterEvent(self, QMouseEvent):
+            ChildButton.enterEvent(self, QMouseEvent)
+            self.comboBox.enterEvent(QMouseEvent)
+            
+        def leaveEvent(self, QMouseEvent):
+            ChildButton.leaveEvent(self, QMouseEvent)
+            self.comboBox.leaveEvent(QMouseEvent)
+            
+        def mousePressEvent(self, QMouseEvent):
+            ChildButton.mousePressEvent(self, QMouseEvent)
+            self.comboBox.mousePressEvent(QMouseEvent)
+            
+        def mouseReleaseEvent(self, QMouseEvent):
+            ChildButton.mouseReleaseEvent(self, QMouseEvent)
+            self.comboBox.mouseReleaseEvent(QMouseEvent)
+             
         def mouseLeftReleased(self, QMouseEvent):
-            Button.mouseLeftReleased(self, QMouseEvent)
-            self.comboBox.showPopup()
-        
+            s = self.startPosition
+            ChildButton.mouseLeftReleased(self, QMouseEvent)
+            if s == QMouseEvent.pos():
+                self.comboBox.showPopup()
+                 
+        def setButton(self, button):
+            ChildButton.setButton(self, button)
+            if self.checkArrow():
+                self.arrow.setButton(button)
+#             
+#         def setFixedHeight(self, *args, **kwargs):
+#             ChildButton.setFixedHeight(self, *args, **kwargs)
+#             if not self.arrow is None:
+#                 self.arrow.setFixedHeight(*args, **kwargs)
+#     
+#         def setFixedWidth(self, *args, **kwargs):
+#             ChildButton.setFixedWidth(self, *args, **kwargs)
+#             if not self.arrow is None:
+#                 self.arrow.setFixedWidth(*args, **kwargs)
+#     
+#         def setFixedSize(self, *args, **kwargs):
+#             ChildButton.setFixedSize(self, *args, **kwargs)
+#             if not self.arrow is None:
+#                 self.arrow.setFixedSize(*args, **kwargs)
+#                 
+#         def setVisible(self, *args, **kwargs):
+#             ChildButton.setVisible(self, *args, **kwargs)
+#             if not self.arrow is None:
+#                 self.arrow.setVisible(*args, **kwargs)
+#             
     def __init__(self, *items):
         self.entered = False
         self.startPosition = None
@@ -2751,11 +2802,30 @@ class ComboBox(QComboBox):
         QComboBox.setFont(self, *args, **kwargs)
         self.__combo.setFont(*args, **kwargs)
         
+    def setFixedHeight(self, *args, **kwargs):
+        QComboBox.setFixedHeight(self, *args, **kwargs)
+        self.__combo.setFixedHeight(*args, **kwargs)
+
+    def setFixedWidth(self, *args, **kwargs):
+        QComboBox.setFixedWidth(self, *args, **kwargs)
+        self.__combo.setFixedWidth(*args, **kwargs)
+
+    def setFixedSize(self, *args, **kwargs):
+        QComboBox.setFixedSize(self, *args, **kwargs)
+        self.__combo.setFixedSize(*args, **kwargs)
+            
+    def setVisible(self, *args, **kwargs):
+        QComboBox.setVisible(self, *args, **kwargs)
+        self.__combo.setVisible(*args, **kwargs)
+        
     def textChanged(self):
         self.__combo.currentText.setText(" "+self.currentText())
         
     def setArrowButton(self, arrow):
         self.__combo.setArrowButton(arrow)
+        
+    def getCombo(self):
+        return self.__combo
         
     def showEvent(self, QEvent):
         if self.isVisible():
@@ -2772,6 +2842,7 @@ class ComboBox(QComboBox):
             self.entered = True
        
     def enterEvent(self, QMouseEvent):
+        QComboBox.enterEvent(self, QMouseEvent)
         self.enter(QMouseEvent)
                 
     def leave(self, QMouseEvent):  
@@ -2779,12 +2850,14 @@ class ComboBox(QComboBox):
             self.entered = False
         
     def leaveEvent(self, QMouseEvent):
+        QComboBox.leaveEvent(self, QMouseEvent)
         self.leave(QMouseEvent)
         
     def mouseMove(self, QMouseEvent):
         pass
         
     def mouseMoveEvent(self, QMouseEvent):
+        QComboBox.mouseMoveEvent(self, QMouseEvent)
         if self.isEnabled():
             self.mouseMove(QMouseEvent)
             
@@ -2807,7 +2880,10 @@ class ComboBox(QComboBox):
                 self.mouseRightPressed(QMouseEvent)
                 
     def mousePressEvent(self, QMouseEvent):
-        self.mousePressed(QMouseEvent)
+        s = self.startPosition
+        if s == QMouseEvent.pos():
+            QComboBox.mousePressEvent(self, QMouseEvent)
+            self.mousePressed(QMouseEvent)
         
     def mouseRightReleased(self, QMouseEvent):
         pass
@@ -2828,53 +2904,82 @@ class ComboBox(QComboBox):
                 self.mouseRightReleased(QMouseEvent)
                 
     def mouseReleaseEvent(self, QMouseEvent):
+        QComboBox.mouseReleaseEvent(self, QMouseEvent)
         self.mouseReleased(QMouseEvent)
         
 class ChildComboBox(ComboBox):
     def __init__(self, *items):
         ComboBox.__init__(self, *items)
+        self.setParentButton(None)
         self.setButton(None)
         self.setObjectName("child-combobox")
-        
+                
     def checkButton(self):
         return self.__button is None
+    
+    def checkParentButton(self):
+        return self.__parentButton is None
+    
+    def setParentButton(self, parentButton):
+        self.__parentButton = parentButton
         
     def setButton(self, button):
         self.__button = button
+        self.getCombo().setButton(button)
         
     def getButton(self):
         return self.__button
-            
+    
+    def getParentButton(self):
+        return self.__parentButton
+    
     def enterEvent(self, QMouseEvent):
         if self.checkButton():
-            self.enter(QMouseEvent)
+            ComboBox.enterEvent(self, QMouseEvent)
         else:
             self.__button.enterEvent(QMouseEvent)
-        
+#             
+#     def leave(self, QMouseEvent):
+#         ComboBox.leave(self, QMouseEvent)
+#         self.setButton(self.__parentButton)
+#         self.setParentButton(None)
+#         if not self.checkButton():
+#             self.__button.leaveEvent(QMouseEvent)
+#             self.__button.setFocus()
+#         
     def leaveEvent(self, QMouseEvent):
         if self.checkButton():
-            self.leave(QMouseEvent)
+            ComboBox.leaveEvent(self, QMouseEvent)
         else:
             self.__button.leaveEvent(QMouseEvent)
+           # self.__button.setFocus()
             
     def mouseMoveEvent(self, QMouseEvent):
         if self.checkButton():
-            self.mouseMove(QMouseEvent)
+            ComboBox.mouseMoveEvent(self, QMouseEvent)
         else:
             self.__button.mouseMoveEvent(QMouseEvent)
-  
+            
     def mousePressEvent(self, QMouseEvent):
         if self.checkButton():
-            self.mousePressed(QMouseEvent)
+            ComboBox.mousePressEvent(self, QMouseEvent)
         else:
+            self.startPosition = QMouseEvent.pos()
             self.__button.mousePressEvent(QMouseEvent)
             
     def mouseReleaseEvent(self, QMouseEvent):
         if self.checkButton():
-            self.mouseReleased(QMouseEvent)
+            ComboBox.mouseReleaseEvent(self, QMouseEvent)
         else:
+            s = self.startPosition
             self.__button.mouseReleaseEvent(QMouseEvent)
-            
+            if QMouseEvent.button() == Qt.LeftButton:
+                if s == QMouseEvent.pos():
+                    self.setFocus()
+                    self.setParentButton(self.__button)
+                    self.setButton(None)
+                    ComboBox.mousePressEvent(self, QMouseEvent)
+           
 class CheckIndicator(ChildButton):
     def __init__(self):
         super().__init__()
