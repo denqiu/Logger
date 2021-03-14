@@ -176,7 +176,7 @@ class Item(ScrollButton):
         self.setFixedHeight(50)
         
     def createCell(self, text, column):
-        return ItemCell(text, TimeSpent, column, self.__user, self.__users)
+        return ItemCell(text, Description, column, self.__user, self.__users)
         
     def getItemsScroll(self):
         return self.__items.getItemsScroll()
@@ -539,7 +539,7 @@ class User(Button):
             
     def mouseLeftReleased(self, QMouseEvent):
         self.getUsersScroll().mouseLeftReleased(QMouseEvent)
-          
+        
 class Users(Form):
     def __init__(self, logger, deliverable):
         self.__logger = logger
@@ -635,7 +635,7 @@ class Users(Form):
         self.updateCurrentEditor(userId)
         if self.getCurrentEditorId() < 1:
             self.refreshItems(userId)
-        
+            
     def setCurrentLeaderButton(self, leader):
         self.__currentLeader = leader
         self.__logger.db.query("select deliverable_id, deliverable from deliverable where user_id = get_current_leader_id()")
@@ -672,11 +672,15 @@ class Users(Form):
 class UsersScroll(ScrollArea):
     def __init__(self, users, logger):
         self.__logger = logger
+        self.beginWait(False)
         ScrollArea.__init__(self, users.group())
         self.setDraggable(True)
         self.setScrollBarVisibility(False, Qt.Horizontal)
         self.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-     
+
+    def beginWait(self, beginWait):
+        self.__beginWait = beginWait
+
     def horizontalScrollValueChanged(self):
         value, getBar = ScrollArea.horizontalScrollValueChanged(self)
         self.__logger.updateHorizontalScroll(value)
@@ -703,7 +707,7 @@ class UsersScroll(ScrollArea):
     def mouseReleaseEvent(self, QMouseEvent):
         if self.checkEditorId():
             ScrollArea.mouseReleaseEvent(self, QMouseEvent)
-
+            
 class Deliverable(Form):
     def __init__(self, logger):
         Form.__init__(self, logger)

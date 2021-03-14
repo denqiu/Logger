@@ -1,10 +1,11 @@
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
-import re, sys
+import re, sys, math, time
 
 class Style:
     def __init__(self, style = ""):
+        self.__widget = ""
         if style.strip() == "":
             self.clear()
         else:
@@ -14,6 +15,9 @@ class Style:
         self.__widget = name
         if not name in self.__style:
             self.__style[name] = {}
+            
+    def getWidget(self):
+        return self.__widget
         
     def setAttribute(self, attribute, value):
         self.__style[self.__widget][attribute] = value
@@ -126,487 +130,6 @@ class SearchForm:
             self.results[num] = dict(result)
         return self
 
-class Group(QGroupBox):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.setObjectName("group")
-        self.setForm(None)
-        self.setStyleSheet("border:0")
-        
-    def setForm(self, form):
-        self.__form = form
-        
-    def getForm(self):
-        return self.__form
-    
-    def checkForm(self):
-        return self.__form is None
-        
-    def searchObjects(self, searchForm = None):
-        if self.checkForm():
-            return None
-        return self.__form.searchObjects(searchForm)
-    
-    def __getParent(self):
-        p = self.parent()
-        while not isinstance(p, QWidget):
-            p = p.parent()
-        return p
-        
-    def mouseReleaseEvent(self, QMouseEvent):
-        self.__getParent().mouseReleaseEvent(QMouseEvent)
-        
-class FormLayout(QFormLayout):
-    def __init__(self, parent = None):
-        self.setForm()
-        self.__isVisible = True
-        self.__isEnabled = True
-        super().__init__(parent)
-        
-    def setForm(self, form = None):
-        self.__form = form
-        
-    def getForm(self):
-        return self.__form
-    
-    def checkForm(self):
-        return self.__form is None
-    
-    def clear(self):
-        self.__clearLayout(self)
-        
-    def isVisible(self):
-        return self.__isVisible
-    
-    def isEnabled(self):
-        return self.__isEnabled
-    
-    def __clearLayout(self, layout):
-        if layout is not None:
-            while layout.count():
-                child = layout.takeAt(0)
-                if not child.widget() is None:
-                    child.widget().deleteLater()
-                elif not child.layout() is None:
-                    self.__clearLayout(child.layout())
-                    
-    def __setLayoutVisibility(self, layout, isVisible):
-        if layout is not None:
-            while layout.count():
-                child = layout.takeAt(0)
-                if not child.widget() is None:
-                    child.widget().setVisible(isVisible)
-                elif not child.layout() is None:
-                    self.__setLayoutVisibility(child.layout(), isVisible)            
-                            
-    def setVisible(self, isVisible):
-        self.__setLayoutVisibility(self, isVisible)
-        self.__isVisible = isVisible
-                           
-    def __setLayoutEnabled(self, layout, isEnabled):
-        if layout is not None:
-            while layout.count():
-                child = layout.takeAt(0)
-                if not child.widget() is None:
-                    child.widget().setEnabled(isEnabled)
-                elif not child.layout() is None:
-                    self.__setLayoutEnabled(child.layout(), isEnabled)            
-                            
-    def setEnabled(self, isEnabled):
-        self.__setLayoutEnabled(self, isEnabled)
-        self.__isEnabled = isEnabled
-                            
-class Form:
-    def __init__(self, parent = None):
-        self.setParent(parent)
-        self.tablelize(False)
-        self.mapCustomResults(False)
-        self.__layout = None
-        self.clearForm()
-        self.newRow()
-        self.setFont(None)
-        self.searchResults(None)
-        self.__merged = False
-        self.__currentRow = None
-        self.setAddingItems(False)
-        self.setColumnSize(None)
-        self.__rowsAligned = {}
-        self.setFormLayout()
-        
-    def setFormLayout(self, formLayout = FormLayout, *args):
-        self.__formLayout = formLayout
-        self.setFormArguments(*args)
-        
-    def setFormArguments(self, *args):
-        self.__args = list(args)
-        
-    def setVisible(self, isVisible):
-        if not self.__form is None:
-            for r in self.__form:
-                row = self.__form[r]
-                for name in row:
-                    obj = row[name]
-                    obj.setVisible(isVisible)
-        
-    def setEnabled(self, isEnabled):
-        if not self.__form is None:
-            for r in self.__form:
-                row = self.__form[r]
-                for name in row:
-                    obj = row[name]
-                    obj.setVisible(isEnabled)
-                    
-    def isVisible(self):
-        if self.__form is None:
-            return False
-        return self.__layout.isVisible()
-                  
-    def isEnabled(self):
-        if self.__form is None:
-            return False
-        return self.__layout.isEnabled()
-        
-    def tablelize(self, tablelize):
-        self.__tablelize = tablelize
-        return self
-    
-    def setColumnSize(self, columnSize):
-        self.__columnSize = columnSize
-        return self
-        
-    def checkColumnSize(self):
-        if self.__currentRow is None or self.__columnSize is None:
-            return False
-        if self.__columnSize < 0:
-            return False
-        return self.__currentRow.size() == self.__columnSize
-        
-    def setParent(self, parent = None):
-        self.__parent = parent
-        return self
-    
-    def getParent(self):
-        return self.__parent
-        
-    def clearForm(self):
-        self.__form = {}
-        if not self.__layout is None:
-            self.__layout.clear()
-        return self
-        
-    def newRow(self):
-        self.__row = {}
-        return self
-    
-    def setRow(self, row):
-        self.__row = row
-        return self
-    
-    def setAddingItems(self, isAdding):
-        self.__isAdding = isAdding
-        return self
-    
-    def isAddingItems(self):
-        return self.__isAdding
-    
-    def searchResults(self, results):
-        self.results = results
-        return self
-    
-    def setFont(self, font):
-        self.__font = font
-        return self
-    
-    def getFont(self, size = 10):
-        font = QFont()
-        font.setFamily("Times New Roman")
-        font.setPointSize(size)
-        font.setBold(True)
-        font.setWeight(75)
-        return font
-    
-    def __checkName(self, obj, check):
-        if isinstance(obj, BoxLayout):
-            name = obj.getAttribute()
-        else:
-            name = obj.objectName()
-        if check in name:
-            name = [n for n in reversed(self.__row.keys()) if not re.search("^"+check+"\d*$", n) is None]
-            if not name == []:
-                name = name[0]
-                s = re.search(check+"(\d*)", name)
-                name = check
-                i = s.group(1)
-                if i == "":
-                    name += "1"
-                else:
-                    name += str(int(i)+1)
-                if isinstance(obj, BoxLayout):
-                    obj.setAttribute(name)
-                else:
-                    obj.setObjectName(name)  
-        return obj 
-            
-    def __add(self, obj, font, *check):
-        if self.checkColumnSize():
-            self.addRow()
-        for c in check:
-            obj = self.__checkName(obj, c)
-        name = obj.getAttribute() if isinstance(obj, BoxLayout) else obj.objectName()
-        if font is None:
-            font = self.__font
-        if not font is None:
-            if obj.font() == QLabel().font():
-                obj.setFont(font)
-        self.__row[name] = obj
-        if not self.__currentRow is None:
-            self.__currentRow.addItems(obj)
-        return self
-        
-    def addLabel(self, name = "", font = None, label = None):  
-        if label is None:
-            label = QLabel(name)
-            label.setObjectName("label" if name.strip() == "" else name)
-        return self.__add(label, font, "label")  
-    
-    def addButtonText(self, text = "", attribute = "", border = None, font = None, buttonText = None):
-        if buttonText is None:
-            buttonText = ButtonText(text, attribute, border)
-        return self.__add(buttonText, font, "text")
-    
-    def addButton(self, button, font = None):
-        but = {ChildButton: "child-button", ScrollButton: "scroll-button", ArrowButton: "arrow", Button: "button"}
-        for b in but:
-            if isinstance(button, b):
-                return self.__add(button, font, but[b])
-        return self
-    
-    def addBoxLayout(self, boxLayout, font = None):
-        return self.__add(boxLayout, font, "vlayout", "hlayout")
-    
-    def addLineBox(self, defaultText = "", message = "", msgIn = True, font = None, lineBox = None): 
-        if lineBox is None:
-            lineBox = LineBox(defaultText, message, msgIn)
-        return self.__add(lineBox, font, "linebox")  
-    
-    def addTextBox(self, defaultText = "", message = "", msgIn = True, font = None, textBox = None): 
-        if textBox is None:
-            textBox = TextBox(defaultText, message, msgIn)
-        return self.__add(textBox, font, "textbox")  
-    
-    def addPassword(self, defaultText = "", message = "", font = None, password = None):
-        if password is None:
-            password = Password(defaultText, message)
-        return self.__add(password, font, "password")
-    
-    def addComboBox(self, comboBox, font = None):
-        return self.__add(comboBox, font, "combobox")
-    
-    def addCheckBox(self, text = "", font = None, checkbox = None):
-        if checkbox is None:
-            checkbox = CheckBox(text)
-        return self.__add(checkbox, font, "checkbox")
-    
-    def addGroup(self, group, font = None):
-        return self.__add(group, font, "group")
-    
-    def addScrollArea(self, scrollArea):
-        return self.__add(scrollArea, None, "scroll-area")
-    
-    def addObject(self, obj, font = None):
-        if isinstance(obj, QScrollArea):
-            return self.addScrollArea(obj)
-        elif isinstance(obj, Group):
-            return self.addGroup(obj, font)
-        elif isinstance(obj, CheckBox) or isinstance(obj, QCheckBox):
-            return self.addCheckBox(font = font, checkbox = obj)
-        elif isinstance(obj, QComboBox):
-            return self.addComboBox(obj, font)
-        elif isinstance(obj, Password):
-            return self.addPassword(font = font, password = obj)
-        elif isinstance(obj, LineBox):
-            return self.addLineBox(font = font, lineBox = obj)
-        elif isinstance(obj, TextBox):
-            return self.addTextBox(font = font, textBox = obj)
-        elif isinstance(obj, BoxLayout):
-            return self.addBoxLayout(obj, font)
-        elif isinstance(obj, Button):
-            return self.addButton(obj, font)
-        elif isinstance(obj, ButtonText):
-            return self.addButtonText(font = font, buttonText = obj)
-        elif isinstance(obj, QLabel):
-            return self.addLabel(font = font, label = obj)
-        else:
-            print("This object doesn't exist.")
-            return self
-    
-    def removeObject(self, name):
-        if name in self.__row:
-            r = self.__row.pop(name)
-            if not self.__currentRow is None:
-                self.__currentRow.removeItems(r)
-            return r
-        return None
-    
-    def formSize(self):
-        return len(self.__form)
-    
-    def newFormRow(self):
-        return self.formSize()+1
-    
-    def setCurrentRow(self, row = None):
-        if row is None:
-            row = self.formSize()
-        self.__currentRow = BoxLayout(Qt.Horizontal)
-        self.__currentRow.setAttribute(str(row))
-        self.__currentRow.setFont(self.__font)
-        self.__layout.addRow(self.__currentRow.layout())
-        
-    def isCurrentRowVisible(self):
-        if self.__currentRow is None:
-            return False
-        return self.__currentRow.isVisible()
-    
-    def currentRowSize(self):
-        if self.__currentRow is None:
-            return 0
-        return self.__currentRow.size()
-        
-    def addRow(self, alignment = None, font = None):
-        row = self.newFormRow()
-        if not self.__layout is None:
-            if self.checkColumnSize():
-                self.setCurrentRow(row)
-            else:
-                return self
-        if not font is None:
-            for name in self.__row:
-                self.__row[name].setFont(font)
-        self.__form[row] = self.__row
-        if not alignment is None:
-            self.__rowsAligned[row] = alignment
-        return self.newRow()
-    
-    def removeRow(self, rowNumber = None):
-        if rowNumber is None:
-            rowNumber = len(self.__form)
-        if rowNumber in self.__form:
-            r = self.__form.pop(rowNumber)
-            nums = [(n-1, n) for n in self.__form if n > rowNumber]
-            if len(nums) > 0:
-                for (newKey, key) in nums:
-                    self.__form[newKey] = self.__form.pop(key)
-            if not self.__layout is None:
-                self.__layout.removeRow(rowNumber-1)
-            return r
-        return None
-    
-    def searchObjects(self, searchForm = None):
-        if searchForm is None:
-            results = self.__form
-        else:
-            if searchForm.searchAllRows():
-                for r in self.__form:
-                    searchForm.search(r, self.__form[r])
-            else:
-                for r in searchForm.rows:
-                    if r in self.__form:
-                        searchForm.search(r, self.__form[r])
-                    else:
-                        print("Row {} does not exist".format(r))
-            results = searchForm.results
-            searchForm.__init__()
-        return self.searchResults(results)
-    
-    def mapCustomResults(self, isCustom):
-        self.__mapCustom = isCustom
-        return self
-    
-    def getCustomResults(self, obj):
-        return obj
-    
-    def __checkObject(self, obj):
-        if self.__mapCustom:
-            self.mapCustomResults(False)
-            return self.getCustomResults(obj)
-        else:
-            if isinstance(obj, CheckBox) or isinstance(obj, QCheckBox):
-                return obj.isChecked()
-            if isinstance(obj, QLineEdit):
-                return obj.text().strip()
-            elif isinstance(obj, QTextEdit):
-                return obj.toPlainText().strip()
-            elif isinstance(obj, ComboBox):
-                return obj.currentText().strip()
-            elif isinstance(obj, Button):
-                return obj.mapText()
-            elif isinstance(obj, ButtonText):
-                return obj.getText().strip()
-            elif isinstance(obj, QLabel):
-                return obj.text().strip()
-            elif isinstance(obj, ScrollArea):
-                return obj.getWidgetOrLayout()
-            elif isinstance(obj, QScrollArea):
-                return obj
-            else:
-                return None
-    
-    def resultValues(self):
-        if not self.results is None:
-            if self.__merged:
-                for name in self.results:
-                    self.results[name] = self.__checkObject(self.results[name])
-            else:
-                for rowNumber in self.results:
-                    row = self.results[rowNumber]
-                    for name in row:
-                        row[name] = self.__checkObject(row[name])
-                    self.results[rowNumber] = row
-        return self
-    
-    def mergeResults(self):
-        if not self.results is None:
-            merge = {}
-            dicts = list(self.results.values())
-            for d in dicts:
-                merge = {**merge, **d}
-            self.results = merge
-            self.__merged = True
-        return self
-    
-    def layout(self, parent = None):
-        if self.__layout is None:
-            if parent is None:
-                parent = self.__parent
-            args = [parent]
-            if len(self.__args) > 0:
-                args += self.__args
-            form = self.__formLayout(*args)
-            form.setForm(self)
-            size = self.newFormRow()
-            for i in range(1, size):
-                row = list(self.__form[i].values())                    
-                h = BoxLayout(Qt.Horizontal, *row)
-                h.setAttribute(str(i))
-                h.setFont(self.__font)
-                hlay = h.layout()
-                if i in self.__rowsAligned:
-                    hlay.setAlignment(self.__rowsAligned[i])
-                form.addRow(hlay)
-            if self.__tablelize:
-                form.setContentsMargins(0, 0, 0, 0)
-                form.setSpacing(0)
-            self.__layout = form
-            if self.__isAdding:
-                self.setCurrentRow(size)
-        return self.__layout
-    
-    def group(self, parent = None):
-        g = Group()
-        g.setForm(self)
-        g.setLayout(self.layout(parent))
-        return g
-    
 class ParentWindow(QWidget): #siblings in progress for both ParentWindow and Window
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -1308,6 +831,7 @@ class Button(QWidget):
         self.__tagNames = dict(zip(self.__childNames, self.__checkChildren))
         self.__tagClasses = dict(zip(self.__childClasses, self.__childNames))
         self.__checks = None
+        self.tablelize(False)
         super().__init__()
         self.startPosition = None
         self.backgroundColor = Qt.white
@@ -1322,6 +846,9 @@ class Button(QWidget):
         self.__layout[self.__layoutSize()] = {self: (None, 0)}
         self.addTextToGrid("border")
         self.setObjectName("button") 
+        
+    def tablelize(self, tablelize):
+        self.__tablelize = tablelize
     
     def __checkChildClass(self, classObject):
         for i, c in enumerate(self.__childClasses):
@@ -1564,6 +1091,9 @@ class Button(QWidget):
     
     def __methods(self):
         g = QGridLayout()
+        if self.__tablelize:
+            g.setSpacing(0)
+            g.setContentsMargins(0, 0, 0, 0)
         objClasses = [type(self), ButtonText, BoxLayout] + self.__childClasses
         lays = [g.addWidget]*2 + [g.addLayout] * (len(objClasses)-2)
         methods = dict(zip(objClasses, lays))
@@ -1848,18 +1378,36 @@ class ScrollArea(QScrollArea):
             if not i is None:
                 return i
         return None
+    
+    def checkWidgetOrLayout(self):
+        return self.getWidgetOrLayout() is None
      
     def setWidgetOrLayoutVisible(self, isVisible):
-        self.getWidgetOrLayout().setVisible(isVisible)
+        if not self.checkWidgetOrLayout():
+            self.getWidgetOrLayout().setVisible(isVisible)
         
     def setWidgetOrLayoutEnabled(self, isEnabled):
-        self.getWidgetOrLayout().setEnabled(isEnabled)
+        if not self.checkWidgetOrLayout():
+            self.getWidgetOrLayout().setEnabled(isEnabled)
         
     def isWidgetOrLayoutVisible(self):
+        if self.checkWidgetOrLayout():
+            return False
         return self.getWidgetOrLayout().isVisible()
 
     def isWidgetOrLayoutEnabled(self):
+        if self.checkWidgetOrLayout():
+            return False
         return self.getWidgetOrLayout().isEnabled()
+    
+    def isWidgetOrLayoutWaitScreenVisible(self):
+        if self.checkWidgetOrLayout():
+            return False
+        return self.getWidgetOrLayout().isWaitScreenVisible()
+        
+    def setWidgetOrLayoutWaitScreenVisible(self, isWaitVisible):
+        if not self.checkWidgetOrLayout():
+            self.getWidgetOrLayout().setWaitScreenVisible(isWaitVisible)
         
     def setBackground(self, name = None, color = "white"):
         if not name is None:
@@ -1983,7 +1531,8 @@ class ScrollArea(QScrollArea):
                     
     def mouseMoveEvent(self, QMouseEvent):
         if self.isEnabled():
-            self.mouseMove(QMouseEvent)
+            if not self.getWidgetOrLayout().isWaitScreenVisible():
+                self.mouseMove(QMouseEvent)
     
     def __startScroll(self, QMouseEvent, mouseButton):
         if self.draggable:
@@ -2010,7 +1559,8 @@ class ScrollArea(QScrollArea):
                 self.mouseRightPressed(QMouseEvent)
                 
     def mousePressEvent(self, QMouseEvent):
-        self.mousePressed(QMouseEvent)
+        if not self.getWidgetOrLayout().isWaitScreenVisible():
+            self.mousePressed(QMouseEvent)
         
     def __endScroll(self, mouseButton):
         if self.draggable:
@@ -2037,7 +1587,8 @@ class ScrollArea(QScrollArea):
                 self.mouseRightReleased(QMouseEvent)
                 
     def mouseReleaseEvent(self, QMouseEvent):
-        self.mouseReleased(QMouseEvent)
+        if not self.getWidgetOrLayout().isWaitScreenVisible():
+            self.mouseReleased(QMouseEvent)
         
     def valueToSet(self, orientation):
         return self.scrollBarValues[orientation]
@@ -3265,3 +2816,689 @@ class MessageBox(ChildWindow):
             f.addButton(b)
         f.addRow(Qt.AlignCenter)
         f.layout()
+        
+class Group(QGroupBox):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.setObjectName("group")
+        self.setForm(None)
+        self.setStyleSheet("border:0")
+        
+    def setForm(self, form):
+        self.__form = form
+        
+    def getForm(self):
+        return self.__form
+    
+    def checkForm(self):
+        return self.__form is None
+        
+    def searchObjects(self, searchForm = None):
+        if self.checkForm():
+            return None
+        return self.__form.searchObjects(searchForm)
+    
+    def setWaitScreenVisible(self, isWaitVisible):
+        if not self.checkForm():
+            self.__form.setWaitScreenVisible(isWaitVisible)
+        
+    def isWaitScreenVisible(self):
+        if self.checkForm():
+            return False
+        return self.__form.isWaitScreenVisible()
+    
+    def __getParent(self):
+        p = self.parent()
+        while not isinstance(p, QWidget):
+            p = p.parent()
+        return p
+        
+    def mouseReleaseEvent(self, QMouseEvent):
+        self.__getParent().mouseReleaseEvent(QMouseEvent)
+        
+class FormLayout(QFormLayout):
+    def __init__(self, parent = None):
+        self.setForm()
+        self.__isVisible = True
+        self.__isEnabled = True
+        super().__init__(parent)
+        
+    def setForm(self, form = None):
+        self.__form = form
+        
+    def getForm(self):
+        return self.__form
+    
+    def checkForm(self):
+        return self.__form is None
+    
+    def searchObjects(self, searchForm = None):
+        if self.checkForm():
+            return None
+        return self.__form.searchObjects(searchForm)
+    
+    def clear(self):
+        self.__clearLayout(self)
+        
+    def isVisible(self):
+        return self.__isVisible
+    
+    def isEnabled(self):
+        return self.__isEnabled
+    
+    def __clearLayout(self, layout):
+        if layout is not None:
+            while layout.count():
+                child = layout.takeAt(0)
+                if not child.widget() is None:
+                    child.widget().deleteLater()
+                elif not child.layout() is None:
+                    self.__clearLayout(child.layout())
+                    
+    def __setLayoutVisibility(self, layout, isVisible):
+        if layout is not None:
+            while layout.count():
+                child = layout.takeAt(0)
+                if not child.widget() is None:
+                    child.widget().setVisible(isVisible)
+                elif not child.layout() is None:
+                    self.__setLayoutVisibility(child.layout(), isVisible)            
+                            
+    def setVisible(self, isVisible):
+        self.__setLayoutVisibility(self, isVisible)
+        self.__isVisible = isVisible
+                           
+    def __setLayoutEnabled(self, layout, isEnabled):
+        if layout is not None:
+            while layout.count():
+                child = layout.takeAt(0)
+                if not child.widget() is None:
+                    child.widget().setEnabled(isEnabled)
+                elif not child.layout() is None:
+                    self.__setLayoutEnabled(child.layout(), isEnabled)            
+                            
+    def setEnabled(self, isEnabled):
+        self.__setLayoutEnabled(self, isEnabled)
+        self.__isEnabled = isEnabled
+        
+    def setWaitScreenVisible(self, isWaitVisible):
+        if not self.checkForm():
+            self.__form.setWaitScreenVisible(isWaitVisible)
+        
+    def isWaitScreenVisible(self):
+        if self.checkForm():
+            return False
+        return self.__form.isWaitScreenVisible()
+    
+class FormGridLayout(QGridLayout):
+    def __init__(self, *args, **kwargs):
+        self.setForm()
+        QGridLayout.__init__(self, *args, **kwargs)
+                
+    def setForm(self, form = None):
+        self.__form = form
+        
+    def getForm(self):
+        return self.__form
+    
+    def checkForm(self):
+        return self.__form is None
+    
+    def searchObjects(self, searchForm = None):
+        if self.checkForm():
+            return None
+        return self.__form.searchObjects(searchForm)
+    
+    def clear(self):
+        if not self.checkForm():
+            self.__clearLayout(self)
+        
+    def isVisible(self):
+        return self.__isVisible
+    
+    def isEnabled(self):
+        return self.__isEnabled
+                              
+    def setVisible(self, isVisible):
+        self.__setLayoutVisibility(self, isVisible)
+        self.__isVisible = isVisible
+                                  
+    def setEnabled(self, isEnabled):
+        self.__setLayoutEnabled(self, isEnabled)
+        self.__isEnabled = isEnabled
+        
+    def setWaitScreenVisible(self, isWaitVisible):
+        if not self.checkForm():
+            self.__form.setWaitScreenVisible(isWaitVisible)
+        
+    def isWaitScreenVisible(self):
+        if self.checkForm():
+            return False
+        return self.__form.isWaitScreenVisible()
+           
+class WaitIcon(ChildButton):
+    def __init__(self, degree = 45):
+        self.__center = None
+        self.__totalCircles = 0
+        self.__radius = 0
+        self.setDegree(degree)
+        self.__currentIndex = 0
+        super().__init__()
+        self.setObjectName("wait")
+        self.__currentColor = self.clickColor
+        self.__defaultColor = self.hoverColor
+        self.clickColor = None
+        self.hoverColor = None
+        self.__start = True
+        self.startTimer(150, Qt.PreciseTimer)
+        self.installEventFilter(self)
+        border = self.getText("border")["border"]
+        s = Style(border.styleSheet())
+        s.setAttribute("border", "1px solid white")
+        border.setStyleSheet(s.css())
+        self.addText(border)
+        self.addTextToGrid("border")
+        
+    def setDegree(self, degree):
+        self.__degree = degree
+        self.__totalCircles = 360//degree
+        positions = [n for n in range(self.__totalCircles)]
+        positions = list(reversed(positions))
+        positions = positions[-3:] + positions[:-3]
+        self.__positions = positions
+        
+    def __isCurrentIndex(self, index):
+        return self.__currentIndex == index
+        
+    def __paintCircle(self, paint, index):
+        color = self.__currentColor if self.__isCurrentIndex(index) else self.__defaultColor
+        paint.setPen(QPen(color, 2, Qt.SolidLine))
+        paint.setBrush(color)
+        degree = self.__positions[index]*self.__degree
+        theta = (math.pi * degree) / 180
+        x = self.__center.x() + self.__radius * math.cos(theta)
+        y = self.__center.y() - self.__radius * math.sin(theta)
+        size = 10
+        paint.drawEllipse(x, y, size, size)
+        return paint
+     
+    def __setCenter(self):
+        radius = self.height()//2
+        self.__center = QPoint(radius-(radius//6), radius-4)
+        self.__radius = radius-14
+        
+    def checkVisibility(self):
+        return self.height() > 0
+              
+    def paintEvent(self, QPaintEvent):
+        if self.isVisible():
+            p = QPainter()
+            p.setFont(self.font())
+            p.begin(self)
+            for n in range(self.__totalCircles):
+                p = self.__paintCircle(p, n)
+            p.end()
+            self.update()
+        
+    def timerEvent(self, QTimerEvent):
+        if self.isVisible():
+            self.__currentIndex = 0 if self.__currentIndex == self.__totalCircles-1 else self.__currentIndex + 1
+         
+    def eventFilter(self, QObject, QEvent):
+        if self.isVisible():
+            if self.__start:
+                self.__start = False
+                self.setFixedHeight(70)
+                self.setFixedWidth(self.height())
+                self.__setCenter()
+        return ChildButton.eventFilter(self, QObject, QEvent)
+         
+class WaitScreen(Button):
+    def __init__(self, message):
+        waitMessage = ButtonText(message, "text")
+        waitMessage.setToolTip("")
+        waitMessage.textHoverColor = None
+        self.__start = True
+        Button.__init__(self, waitMessage)
+        border = self.getText("border")["border"]
+        s = Style(border.styleSheet())
+        s.setAttribute("border", "1px solid white")
+        border.setStyleSheet(s.css())
+        self.addText(border)
+        self.addTextToGrid("border")
+        self.addChildren(WaitIcon())
+        boxLayout = BoxLayout(Qt.Horizontal, "text", "wait")
+        self.addBoxLayoutToGrid(boxLayout, Qt.AlignCenter)
+        self.clickColor = None
+        self.hoverColor = None
+        self.installEventFilter(self)
+        
+    def eventFilter(self, QObject, QEvent):
+        if self.isVisible():
+            if self.__start:
+                self.leave(QMouseEvent)
+                self.__start = False
+        return Button.eventFilter(self, QObject, QEvent)
+    
+class Form:
+    def __init__(self, parent = None):
+        self.setParent(parent)
+        self.tablelize(False)
+        self.mapCustomResults(False)
+        self.__layout = None
+        self.__gridLayout = None
+        self.clearForm()
+        self.newRow()
+        self.setFont(None)
+        self.searchResults(None)
+        self.__merged = False
+        self.__currentRow = None
+        self.setAddingItems(False)
+        self.setColumnSize(None)
+        self.__rowsAligned = {}
+        self.setFormLayout()
+        self.setFormArguments()
+        self.setWaitScreen()
+        
+    def setFormLayout(self, formLayout = FormLayout):
+        self.__formLayout = formLayout
+        
+    def setFormArguments(self, *args):
+        self.__args = list(args)
+        
+    def setVisible(self, isVisible):
+        if not self.__form is None:
+            for r in self.__form:
+                row = self.__form[r]
+                for name in row:
+                    obj = row[name]
+                    obj.setVisible(isVisible)
+        
+    def setEnabled(self, isEnabled):
+        if not self.__form is None:
+            for r in self.__form:
+                row = self.__form[r]
+                for name in row:
+                    obj = row[name]
+                    obj.setVisible(isEnabled)
+                    
+    def isVisible(self):
+        if self.__form is None:
+            return False
+        return self.__layout.isVisible()
+                  
+    def isEnabled(self):
+        if self.__form is None:
+            return False
+        return self.__layout.isEnabled()
+        
+    def tablelize(self, tablelize):
+        self.__tablelize = tablelize
+        return self
+    
+    def setColumnSize(self, columnSize):
+        self.__columnSize = columnSize
+        return self
+        
+    def checkColumnSize(self):
+        if self.__currentRow is None or self.__columnSize is None:
+            return False
+        if self.__columnSize < 0:
+            return False
+        return self.__currentRow.size() == self.__columnSize
+        
+    def setParent(self, parent = None):
+        self.__parent = parent
+        return self
+    
+    def getParent(self):
+        return self.__parent
+        
+    def clearForm(self):
+        self.__form = {}
+        if not self.__layout is None:
+            self.__layout.clear()
+        return self
+        
+    def newRow(self):
+        self.__row = {}
+        return self
+    
+    def setRow(self, row):
+        self.__row = row
+        return self
+    
+    def setAddingItems(self, isAdding):
+        self.__isAdding = isAdding
+        return self
+    
+    def isAddingItems(self):
+        return self.__isAdding
+    
+    def searchResults(self, results):
+        self.results = results
+        return self
+    
+    def setFont(self, font):
+        self.__font = font
+        return self
+    
+    def getFont(self, size = 10):
+        font = QFont()
+        font.setFamily("Times New Roman")
+        font.setPointSize(size)
+        font.setBold(True)
+        font.setWeight(75)
+        return font
+    
+    def __checkName(self, obj, check):
+        if isinstance(obj, BoxLayout):
+            name = obj.getAttribute()
+        else:
+            name = obj.objectName()
+        if check in name:
+            name = [n for n in reversed(self.__row.keys()) if not re.search("^"+check+"\d*$", n) is None]
+            if not name == []:
+                name = name[0]
+                s = re.search(check+"(\d*)", name)
+                name = check
+                i = s.group(1)
+                if i == "":
+                    name += "1"
+                else:
+                    name += str(int(i)+1)
+                if isinstance(obj, BoxLayout):
+                    obj.setAttribute(name)
+                else:
+                    obj.setObjectName(name)  
+        return obj 
+            
+    def __add(self, obj, font, *check):
+        if self.checkColumnSize():
+            self.addRow()
+        for c in check:
+            obj = self.__checkName(obj, c)
+        name = obj.getAttribute() if isinstance(obj, BoxLayout) else obj.objectName()
+        if font is None:
+            font = self.__font
+        if not font is None:
+            if obj.font() == QLabel().font():
+                obj.setFont(font)
+        self.__row[name] = obj
+        if not self.__currentRow is None:
+            self.__currentRow.addItems(obj)
+        return self
+        
+    def addLabel(self, name = "", font = None, label = None):  
+        if label is None:
+            label = QLabel(name)
+            label.setObjectName("label" if name.strip() == "" else name)
+        return self.__add(label, font, "label")  
+    
+    def addButtonText(self, text = "", attribute = "", border = None, font = None, buttonText = None):
+        if buttonText is None:
+            buttonText = ButtonText(text, attribute, border)
+        return self.__add(buttonText, font, "text")
+    
+    def addButton(self, button, font = None):
+        but = {ChildButton: "child-button", ScrollButton: "scroll-button", ArrowButton: "arrow", Button: "button"}
+        for b in but:
+            if isinstance(button, b):
+                return self.__add(button, font, but[b])
+        return self
+    
+    def addBoxLayout(self, boxLayout, font = None):
+        return self.__add(boxLayout, font, "vlayout", "hlayout")
+    
+    def addLineBox(self, defaultText = "", message = "", msgIn = True, font = None, lineBox = None): 
+        if lineBox is None:
+            lineBox = LineBox(defaultText, message, msgIn)
+        return self.__add(lineBox, font, "linebox")  
+    
+    def addTextBox(self, defaultText = "", message = "", msgIn = True, font = None, textBox = None): 
+        if textBox is None:
+            textBox = TextBox(defaultText, message, msgIn)
+        return self.__add(textBox, font, "textbox")  
+    
+    def addPassword(self, defaultText = "", message = "", font = None, password = None):
+        if password is None:
+            password = Password(defaultText, message)
+        return self.__add(password, font, "password")
+    
+    def addComboBox(self, comboBox, font = None):
+        return self.__add(comboBox, font, "combobox")
+    
+    def addCheckBox(self, text = "", font = None, checkbox = None):
+        if checkbox is None:
+            checkbox = CheckBox(text)
+        return self.__add(checkbox, font, "checkbox")
+    
+    def addGroup(self, group, font = None):
+        return self.__add(group, font, "group")
+    
+    def addScrollArea(self, scrollArea):
+        return self.__add(scrollArea, None, "scroll-area")
+    
+    def addObject(self, obj, font = None):
+        if isinstance(obj, QScrollArea):
+            return self.addScrollArea(obj)
+        elif isinstance(obj, Group):
+            return self.addGroup(obj, font)
+        elif isinstance(obj, CheckBox) or isinstance(obj, QCheckBox):
+            return self.addCheckBox(font = font, checkbox = obj)
+        elif isinstance(obj, QComboBox):
+            return self.addComboBox(obj, font)
+        elif isinstance(obj, Password):
+            return self.addPassword(font = font, password = obj)
+        elif isinstance(obj, LineBox):
+            return self.addLineBox(font = font, lineBox = obj)
+        elif isinstance(obj, TextBox):
+            return self.addTextBox(font = font, textBox = obj)
+        elif isinstance(obj, BoxLayout):
+            return self.addBoxLayout(obj, font)
+        elif isinstance(obj, Button):
+            return self.addButton(obj, font)
+        elif isinstance(obj, ButtonText):
+            return self.addButtonText(font = font, buttonText = obj)
+        elif isinstance(obj, QLabel):
+            return self.addLabel(font = font, label = obj)
+        else:
+            print("This object doesn't exist.")
+            return self
+    
+    def removeObject(self, name):
+        if name in self.__row:
+            r = self.__row.pop(name)
+            if not self.__currentRow is None:
+                self.__currentRow.removeItems(r)
+            return r
+        return None
+    
+    def formSize(self):
+        return len(self.__form)
+    
+    def newFormRow(self):
+        return self.formSize()+1
+    
+    def setCurrentRow(self, row = None):
+        if row is None:
+            row = self.formSize()
+        self.__currentRow = BoxLayout(Qt.Horizontal)
+        self.__currentRow.setAttribute(str(row))
+        self.__currentRow.setFont(self.__font)
+        self.__layout.addRow(self.__currentRow.layout())
+        
+    def isCurrentRowVisible(self):
+        if self.__currentRow is None:
+            return False
+        return self.__currentRow.isVisible()
+    
+    def currentRowSize(self):
+        if self.__currentRow is None:
+            return 0
+        return self.__currentRow.size()
+        
+    def addRow(self, alignment = None, font = None):
+        row = self.newFormRow()
+        if not self.__layout is None:
+            if self.checkColumnSize():
+                self.setCurrentRow(row)
+            else:
+                return self
+        if not font is None:
+            for name in self.__row:
+                self.__row[name].setFont(font)
+        self.__form[row] = self.__row
+        if not alignment is None:
+            self.__rowsAligned[row] = alignment
+        return self.newRow()
+    
+    def removeRow(self, rowNumber = None):
+        if rowNumber is None:
+            rowNumber = len(self.__form)
+        if rowNumber in self.__form:
+            r = self.__form.pop(rowNumber)
+            nums = [(n-1, n) for n in self.__form if n > rowNumber]
+            if len(nums) > 0:
+                for (newKey, key) in nums:
+                    self.__form[newKey] = self.__form.pop(key)
+            if not self.__layout is None:
+                self.__layout.removeRow(rowNumber-1)
+            return r
+        return None
+    
+    def searchObjects(self, searchForm = None):
+        if searchForm is None:
+            results = self.__form
+        else:
+            if searchForm.searchAllRows():
+                for r in self.__form:
+                    searchForm.search(r, self.__form[r])
+            else:
+                for r in searchForm.rows:
+                    if r in self.__form:
+                        searchForm.search(r, self.__form[r])
+                    else:
+                        print("Row {} does not exist".format(r))
+            results = searchForm.results
+            searchForm.__init__()
+        return self.searchResults(results)
+    
+    def mapCustomResults(self, isCustom):
+        self.__mapCustom = isCustom
+        return self
+    
+    def getCustomResults(self, obj):
+        return obj
+    
+    def __checkObject(self, obj):
+        if self.__mapCustom:
+            self.mapCustomResults(False)
+            return self.getCustomResults(obj)
+        else:
+            if isinstance(obj, CheckBox) or isinstance(obj, QCheckBox):
+                return obj.isChecked()
+            if isinstance(obj, QLineEdit):
+                return obj.text().strip()
+            elif isinstance(obj, QTextEdit):
+                return obj.toPlainText().strip()
+            elif isinstance(obj, ComboBox):
+                return obj.currentText().strip()
+            elif isinstance(obj, Button):
+                return obj.mapText()
+            elif isinstance(obj, ButtonText):
+                return obj.getText().strip()
+            elif isinstance(obj, QLabel):
+                return obj.text().strip()
+            elif isinstance(obj, ScrollArea):
+                return obj.getWidgetOrLayout()
+            elif isinstance(obj, QScrollArea):
+                return obj
+            else:
+                return None
+    
+    def resultValues(self):
+        if not self.results is None:
+            if self.__merged:
+                for name in self.results:
+                    self.results[name] = self.__checkObject(self.results[name])
+            else:
+                for rowNumber in self.results:
+                    row = self.results[rowNumber]
+                    for name in row:
+                        row[name] = self.__checkObject(row[name])
+                    self.results[rowNumber] = row
+        return self
+    
+    def mergeResults(self):
+        if not self.results is None:
+            merge = {}
+            dicts = list(self.results.values())
+            for d in dicts:
+                merge = {**merge, **d}
+            self.results = merge
+            self.__merged = True
+        return self
+    
+    def setWaitScreen(self, message = "Please wait...", font = None, waitScreen = None):
+        if waitScreen is None:
+            waitScreen = WaitScreen(message)
+            if font is None:
+                font = self.getFont(20)
+            waitScreen.setFont(font)
+        waitScreen.tablelize(self.__tablelize)
+        g = Group()
+        g.setLayout(waitScreen.layout())
+        g.setVisible(False)
+        self.__waitScreen = g
+    
+    def setWaitScreenVisible(self, isWaitVisible):
+        self.__waitScreen.setVisible(isWaitVisible)
+        
+    def isWaitScreenVisible(self):
+        return self.__waitScreen.isVisible()
+    
+    def getFormLayout(self):
+        return self.__layout
+    
+    def layout(self, parent = None):
+        if self.__layout is None:
+            if parent is None:
+                parent = self.__parent
+            args = [parent]
+            if len(self.__args) > 0:
+                args += self.__args
+            form = self.__formLayout(*args)
+            form.setForm(self)
+            size = self.newFormRow()
+            for i in range(1, size):
+                row = list(self.__form[i].values())                    
+                h = BoxLayout(Qt.Horizontal, *row)
+                h.setAttribute(str(i))
+                h.setFont(self.__font)
+                hlay = h.layout()
+                if i in self.__rowsAligned:
+                    hlay.setAlignment(self.__rowsAligned[i])
+                form.addRow(hlay)
+            if self.__tablelize:
+                form.setContentsMargins(0, 0, 0, 0)
+                form.setSpacing(0)
+            form.setForm(self)
+            self.__layout = form
+            gridLayout = FormGridLayout()
+            gridLayout.setForm(self)
+            gridLayout.addLayout(self.__layout, 0, 0)
+            gridLayout.addWidget(self.__waitScreen, 0, 0)
+            if self.__tablelize:
+                gridLayout.setContentsMargins(0, 0, 0, 0)
+                gridLayout.setSpacing(0)
+            self.__gridLayout = gridLayout
+            if self.__isAdding:
+                self.setCurrentRow(size)
+        return self.__gridLayout
+    
+    def group(self, parent = None):
+        g = Group()
+        g.setForm(self)
+        g.setLayout(self.layout(parent))
+        return g
