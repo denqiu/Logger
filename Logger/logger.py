@@ -166,7 +166,7 @@ class Item(ScrollButton):
         self.setObjectName("{}_{}".format(user, itemId))
         cells = {}
         for i in range(1, 5):
-            cell = self.createCell("hi", i)
+            cell = self.createCell("hi"+str(itemId), i)
             cells[cell.objectName()] = cell
         self.addChildren(*list(cells.values()))
         boxLayout = BoxLayout(Qt.Horizontal, *list(cells.keys()))
@@ -228,27 +228,30 @@ class Items(Form):
         self.__logger = logger
         self.__index = 1
         Form.__init__(self)
-        self.tablelize(True)
+        self.tablelize(True).setWaitScreen("")
+        self.setColumnSize(1).setRowsPerChunk(4)
         self.queryItems()
-        self.setAddingItems(True).setColumnSize(1)
+        self.setAddingItems(True)
         
     def refresh(self):
         print("refreshing", self.__user, ":", self.__userId)
-        self.clearForm().newRow()
+        self.clearForm()
+        self.__index = 1
         self.queryItems()
+        self.__logger.loadChunks(self.getItemsScroll())
+        
+    def loadChunk(self):
+        if self.__logger.getCurrentEditorId() < 1:
+            Form.loadChunk(self)
         
     def createItem(self, itemId):
         return Item(self.__index, self.newFormRow(), itemId, self.__user, self.__users, self)
         
     def queryItems(self):
         for i in range(1, 31):
-            if self.isAddingItems():
-                self.setCurrentRow()
             self.addButton(self.createItem(i), self.getFont())
             self.__index += 1
-            if not self.isAddingItems():
-                self.addRow()
-                
+           
     def getRows(self, *rowNumbers):
         if self.formSize() > 0:
             search = SearchForm().searchClasses(Item)
@@ -313,7 +316,7 @@ class ItemsScroll(ScrollArea):
     def mouseLeftReleased(self, QMouseEvent):
         ScrollArea.mouseLeftReleased(self, QMouseEvent)
         self.getUsersScroll().mouseLeftReleased(QMouseEvent)
-              
+        
 class Leader(Action):
     def __init__(self, userId, users):
         self.setLeader(False)
@@ -763,7 +766,25 @@ class Logger(ParentWindow):
                     search = SearchForm().searchNames("refresh")
                     refresh = self.__deliverable.searchObjects(search).mergeResults().results["refresh"]
                     refresh.setUsers(self.__users)
+                    search = SearchForm().searchClasses(ScrollArea)
+                    scrolls = self.__users.searchObjects(search).mergeResults().results
+                    scrolls = tuple(scrolls.values())
+                    for s in scrolls:
+                        self.loadChunks(s)
                 self.__start = False
+                
+    def loadChunks(self, scroll):
+        chunks = 0
+        size = scroll.getItems().getRowCount()
+        if self.isMaximized():
+            if size < 20:
+                chunks = int((20 - size) // scroll.getWidgetOrLayoutRowsPerChunk())
+        else:
+            if size < 8:
+                chunks = 1
+        if chunks > 0:
+            for _ in range(chunks):
+                scroll.widgetOrLayoutLoadChunk()
                  
     def eventFilter(self, QObject, QEvent):
         if self.isVisible():
@@ -778,6 +799,7 @@ class Logger(ParentWindow):
                                 cells = r.getCells()
                                 for c in cells:
                                     c.autoSize()
+                        self.loadChunks(s)
         return ParentWindow.eventFilter(self, QObject, QEvent)
                  
     def maximizeEvent(self, QEvent):

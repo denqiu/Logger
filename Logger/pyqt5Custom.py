@@ -1409,6 +1409,15 @@ class ScrollArea(QScrollArea):
         if not self.checkWidgetOrLayout():
             self.getWidgetOrLayout().setWaitScreenVisible(isWaitVisible)
         
+    def widgetOrLayoutLoadChunk(self):
+        if not self.checkWidgetOrLayout():
+            self.getWidgetOrLayout().loadChunk()
+           
+    def getWidgetOrLayoutRowsPerChunk(self):
+        if self.checkWidgetOrLayout():
+            return 0
+        return self.getWidgetOrLayout().getRowsPerChunk()
+           
     def setBackground(self, name = None, color = "white"):
         if not name is None:
             self.setObjectName(name)
@@ -1490,6 +1499,8 @@ class ScrollArea(QScrollArea):
         oldValue, newValue = (self.scrollBarValues[orientation], bar.value())
         if abs(oldValue-newValue) == 1:
             self.scrollBarValues[orientation] = newValue
+        if newValue == bar.maximum():
+            self.widgetOrLayoutLoadChunk()
         return (self.scrollBarValues[orientation], bar)
     
     def __checkValueRange(self, value, orientation, bar):
@@ -1654,7 +1665,7 @@ class ScrollButton(Button):
         else:
             self.enterEvent(QMouseEvent)
         
-class LineBox(QLineEdit):
+class LineBox(QLineEdit): #Add clear button
     class _Message(ButtonText):
         def __init__(self, message, lineBox):
             super().__init__(message, "message")
@@ -1823,7 +1834,7 @@ class LineBox(QLineEdit):
         QLineEdit.mouseReleaseEvent(self, QMouseEvent)
         self.mouseReleased(QMouseEvent)
         
-class TextBox(QTextEdit):
+class TextBox(QTextEdit):#Add clear button
     class _Message(ButtonText):
         def __init__(self, message, textBox):
             super().__init__(message, "message")
@@ -2826,6 +2837,7 @@ class Group(QGroupBox):
         
     def setForm(self, form):
         self.__form = form
+        return self
         
     def getForm(self):
         return self.__form
@@ -2839,14 +2851,25 @@ class Group(QGroupBox):
         return self.__form.searchObjects(searchForm)
     
     def setWaitScreenVisible(self, isWaitVisible):
-        if not self.checkForm():
-            self.__form.setWaitScreenVisible(isWaitVisible)
+        if self.checkForm():
+            return self
+        return self.__form.setWaitScreenVisible(isWaitVisible)
         
     def isWaitScreenVisible(self):
         if self.checkForm():
             return False
         return self.__form.isWaitScreenVisible()
     
+    def loadChunk(self):
+        if not self.checkForm():
+            self.__form.loadChunk()
+        return self
+           
+    def getRowsPerChunk(self):
+        if self.checkForm():
+            return 0
+        return self.__form.getRowsPerChunk()
+           
     def __getParent(self):
         p = self.parent()
         while not isinstance(p, QWidget):
@@ -2865,6 +2888,7 @@ class FormLayout(QFormLayout):
         
     def setForm(self, form = None):
         self.__form = form
+        return self
         
     def getForm(self):
         return self.__form
@@ -2879,6 +2903,7 @@ class FormLayout(QFormLayout):
     
     def clear(self):
         self.__clearLayout(self)
+        return self
         
     def isVisible(self):
         return self.__isVisible
@@ -2907,6 +2932,7 @@ class FormLayout(QFormLayout):
     def setVisible(self, isVisible):
         self.__setLayoutVisibility(self, isVisible)
         self.__isVisible = isVisible
+        return self
                            
     def __setLayoutEnabled(self, layout, isEnabled):
         if layout is not None:
@@ -2920,16 +2946,33 @@ class FormLayout(QFormLayout):
     def setEnabled(self, isEnabled):
         self.__setLayoutEnabled(self, isEnabled)
         self.__isEnabled = isEnabled
+        return self
         
     def setWaitScreenVisible(self, isWaitVisible):
-        if not self.checkForm():
-            self.__form.setWaitScreenVisible(isWaitVisible)
+        if self.checkForm():
+            return self
+        return self.__form.setWaitScreenVisible(isWaitVisible)
         
     def isWaitScreenVisible(self):
         if self.checkForm():
             return False
         return self.__form.isWaitScreenVisible()
     
+    def loadChunk(self):
+        if not self.checkForm():
+            self.__form.loadChunk()
+        return self
+    
+    def getRowsPerChunk(self):
+        if self.checkForm():
+            return 0
+        return self.__form.getRowsPerChunk()
+           
+    def timerEvent(self, QTimerEvent):
+        if self.isWaitScreenVisible():
+            self.setWaitScreenVisible(False)
+            self.killTimer(0)
+           
 class FormGridLayout(QGridLayout):
     def __init__(self, *args, **kwargs):
         self.setForm()
@@ -2937,6 +2980,7 @@ class FormGridLayout(QGridLayout):
                 
     def setForm(self, form = None):
         self.__form = form
+        return self
         
     def getForm(self):
         return self.__form
@@ -2947,34 +2991,52 @@ class FormGridLayout(QGridLayout):
     def searchObjects(self, searchForm = None):
         if self.checkForm():
             return None
-        return self.__form.searchObjects(searchForm)
+        return self.__form.searchObjects(searchForm)        
     
     def clear(self):
         if not self.checkForm():
-            self.__clearLayout(self)
+            self.__form.clearForm()
+        return self
         
     def isVisible(self):
-        return self.__isVisible
+        if self.checkForm():
+            return False
+        return self.__form.isVisible()
     
     def isEnabled(self):
-        return self.__isEnabled
+        if self.checkForm():
+            return False
+        return self.__form.isEnabled()
                               
     def setVisible(self, isVisible):
-        self.__setLayoutVisibility(self, isVisible)
-        self.__isVisible = isVisible
+        if not self.checkForm():
+            self.__form.setVisible(isVisible)
+        return self
                                   
     def setEnabled(self, isEnabled):
-        self.__setLayoutEnabled(self, isEnabled)
-        self.__isEnabled = isEnabled
+        if not self.checkForm():
+            self.__form.setEnabled(isEnabled)
+        return self
         
     def setWaitScreenVisible(self, isWaitVisible):
         if not self.checkForm():
             self.__form.setWaitScreenVisible(isWaitVisible)
+        return self
         
     def isWaitScreenVisible(self):
         if self.checkForm():
             return False
         return self.__form.isWaitScreenVisible()
+    
+    def loadChunk(self):
+        if not self.checkForm():
+            self.__form.loadChunk()
+        return self
+    
+    def getRowsPerChunk(self):
+        if self.checkForm():
+            return 0
+        return self.__form.getRowsPerChunk()
            
 class WaitIcon(ChildButton):
     def __init__(self, degree = 45):
@@ -3004,7 +3066,8 @@ class WaitIcon(ChildButton):
         self.__totalCircles = 360//degree
         positions = [n for n in range(self.__totalCircles)]
         positions = list(reversed(positions))
-        positions = positions[-3:] + positions[:-3]
+        n = -3
+        positions = positions[n:] + positions[:n]
         self.__positions = positions
         
     def __isCurrentIndex(self, index):
@@ -3026,10 +3089,7 @@ class WaitIcon(ChildButton):
         radius = self.height()//2
         self.__center = QPoint(radius-(radius//6), radius-4)
         self.__radius = radius-14
-        
-    def checkVisibility(self):
-        return self.height() > 0
-              
+       
     def paintEvent(self, QPaintEvent):
         if self.isVisible():
             p = QPainter()
@@ -3059,6 +3119,7 @@ class WaitScreen(Button):
         waitMessage.setToolTip("")
         waitMessage.textHoverColor = None
         self.__start = True
+        self.setForm(None)
         Button.__init__(self, waitMessage)
         border = self.getText("border")["border"]
         s = Style(border.styleSheet())
@@ -3073,11 +3134,18 @@ class WaitScreen(Button):
         self.hoverColor = None
         self.installEventFilter(self)
         
+    def setForm(self, form):
+        self.__form = form
+        
     def eventFilter(self, QObject, QEvent):
         if self.isVisible():
             if self.__start:
                 self.leave(QMouseEvent)
                 self.__start = False
+            if not self.__form is None:
+                parent = self.__form.getParent()
+                if not parent is None:
+                    self.setFixedHeight(parent.height())
         return Button.eventFilter(self, QObject, QEvent)
     
 class Form:
@@ -3087,24 +3155,26 @@ class Form:
         self.mapCustomResults(False)
         self.__layout = None
         self.__gridLayout = None
+        self.__currentRow = None
+        self.setAddingItems(False)
         self.clearForm()
         self.newRow()
         self.setFont(None)
         self.searchResults(None)
         self.__merged = False
-        self.__currentRow = None
-        self.setAddingItems(False)
         self.setColumnSize(None)
         self.__rowsAligned = {}
-        self.setFormLayout()
-        self.setFormArguments()
+        self.setFormLayout().setFormArguments()
         self.setWaitScreen()
+        self.setRowsPerChunk().__addNewChunk(False)
         
     def setFormLayout(self, formLayout = FormLayout):
         self.__formLayout = formLayout
+        return self
         
     def setFormArguments(self, *args):
         self.__args = list(args)
+        return self
         
     def setVisible(self, isVisible):
         if not self.__form is None:
@@ -3141,11 +3211,11 @@ class Form:
         return self
         
     def checkColumnSize(self):
-        if self.__currentRow is None or self.__columnSize is None:
+        if self.__columnSize is None:
             return False
         if self.__columnSize < 0:
             return False
-        return self.__currentRow.size() == self.__columnSize
+        return len(self.__row) == self.__columnSize
         
     def setParent(self, parent = None):
         self.__parent = parent
@@ -3156,8 +3226,12 @@ class Form:
         
     def clearForm(self):
         self.__form = {}
+        self.__setStartRow(0)
+        self.__start = True
         if not self.__layout is None:
             self.__layout.clear()
+        if not self.__currentRow is None:
+            self.__currentRow = None
         return self
         
     def newRow(self):
@@ -3214,8 +3288,6 @@ class Form:
         return obj 
             
     def __add(self, obj, font, *check):
-        if self.checkColumnSize():
-            self.addRow()
         for c in check:
             obj = self.__checkName(obj, c)
         name = obj.getAttribute() if isinstance(obj, BoxLayout) else obj.objectName()
@@ -3224,9 +3296,17 @@ class Form:
         if not font is None:
             if obj.font() == QLabel().font():
                 obj.setFont(font)
+        if self.isAddingItems():
+            if self.__currentRow is None:
+                if self.__start:
+                    self.__start = False
+                    self.setCurrentRow()
         self.__row[name] = obj
         if not self.__currentRow is None:
-            self.__currentRow.addItems(obj)
+            if not self.__stopLoading(self.newFormRow()):
+                self.__currentRow.addItems(obj)
+        if self.checkColumnSize():
+            self.addRow()
         return self
         
     def addLabel(self, name = "", font = None, label = None):  
@@ -3320,13 +3400,20 @@ class Form:
     def newFormRow(self):
         return self.formSize()+1
     
-    def setCurrentRow(self, row = None):
+    def setCurrentRow(self, row = None, alignment = None, font = None):
         if row is None:
-            row = self.formSize()
-        self.__currentRow = BoxLayout(Qt.Horizontal)
-        self.__currentRow.setAttribute(str(row))
-        self.__currentRow.setFont(self.__font)
-        self.__layout.addRow(self.__currentRow.layout())
+            row = self.newFormRow()
+        if self.__stopLoading(row):
+            if not self.__currentRow is None:
+                self.__currentRow = None
+        else:
+            self.__currentRow = BoxLayout(Qt.Horizontal)
+            self.__currentRow.setAttribute(str(row))
+            self.__currentRow.setFont(self.__font if font is None else font)
+            if not alignment is None:
+                self.__currentRow.setAlignment(alignment)
+            self.__layout.addRow(self.__currentRow.layout())
+        return self
         
     def isCurrentRowVisible(self):
         if self.__currentRow is None:
@@ -3337,20 +3424,35 @@ class Form:
         if self.__currentRow is None:
             return 0
         return self.__currentRow.size()
+    
+    def loadChunk(self):
+        start = self.__startRow-1
+        if start < self.formSize() and start > -1:
+            self.__addNewChunk(True)
+            unloadedRows = list(self.__form.keys())[start:]
+            for row in unloadedRows:
+                if self.__stopLoading(row):
+                    break
+                else:
+                    self.setCurrentRow(row)
+                    for name in self.__form[row]:
+                        self.__currentRow.addItems(self.__form[row][name])
+            if len(unloadedRows) < self.__chunkSize:
+                self.__setStartRow(row+1)
+            self.__addNewChunk(False)
+        return self
         
     def addRow(self, alignment = None, font = None):
         row = self.newFormRow()
-        if not self.__layout is None:
-            if self.checkColumnSize():
-                self.setCurrentRow(row)
-            else:
-                return self
         if not font is None:
             for name in self.__row:
                 self.__row[name].setFont(font)
-        self.__form[row] = self.__row
         if not alignment is None:
             self.__rowsAligned[row] = alignment
+        if not self.__layout is None:
+            if self.checkColumnSize():
+                self.setCurrentRow(row, alignment, font)
+        self.__form[row] = self.__row
         return self.newRow()
     
     def removeRow(self, rowNumber = None):
@@ -3451,9 +3553,12 @@ class Form:
         g.setLayout(waitScreen.layout())
         g.setVisible(False)
         self.__waitScreen = g
+        return self
     
     def setWaitScreenVisible(self, isWaitVisible):
+        self.__waitScreen.setForm(self if isWaitVisible else None)
         self.__waitScreen.setVisible(isWaitVisible)
+        return self
         
     def isWaitScreenVisible(self):
         return self.__waitScreen.isVisible()
@@ -3461,6 +3566,47 @@ class Form:
     def getFormLayout(self):
         return self.__layout
     
+    #allows dynamic scrolling functionality, loading "N" rows everytime scroll reaches max value 
+    def setRowsPerChunk(self, rows = 0):
+        self.__chunkSize = rows
+        return self
+    
+    def getRowsPerChunk(self):
+        return self.__chunkSize
+    
+    def checkRowsPerChunk(self):
+        return self.__chunkSize > 0
+    
+    def __setStartRow(self, row = 0):
+        self.__startRow = row
+        return self
+    
+    def getRowCount(self):
+        if self.checkRowsPerChunk():
+            return self.__startRow-1
+        return self.formSize()
+        
+    def __stopLoading(self, row):
+        if self.checkRowsPerChunk():
+            if self.__isNewChunk:
+                check = row - self.__startRow == self.__chunkSize
+            else:
+                check = row > self.__chunkSize
+            if check:
+                if self.__isNewChunk:
+                    self.__setStartRow()
+                if self.__startRow < 1:
+                    self.__setStartRow(row)
+                return True
+        return False
+    
+    def __addNewChunk(self, isNewChunk):
+        self.__isNewChunk = isNewChunk
+        return self
+    
+    def __checkNewChunk(self):
+        return not self.__isNewChunk
+        
     def layout(self, parent = None):
         if self.__layout is None:
             if parent is None:
@@ -3472,14 +3618,18 @@ class Form:
             form.setForm(self)
             size = self.newFormRow()
             for i in range(1, size):
-                row = list(self.__form[i].values())                    
-                h = BoxLayout(Qt.Horizontal, *row)
-                h.setAttribute(str(i))
-                h.setFont(self.__font)
-                hlay = h.layout()
-                if i in self.__rowsAligned:
-                    hlay.setAlignment(self.__rowsAligned[i])
-                form.addRow(hlay)
+                if self.__stopLoading(i):
+                    size = i
+                    break
+                else:
+                    row = list(self.__form[i].values())                    
+                    h = BoxLayout(Qt.Horizontal, *row)
+                    h.setAttribute(str(i))
+                    h.setFont(self.__font)
+                    hlay = h.layout()
+                    if i in self.__rowsAligned:
+                        hlay.setAlignment(self.__rowsAligned[i])
+                    form.addRow(hlay)
             if self.__tablelize:
                 form.setContentsMargins(0, 0, 0, 0)
                 form.setSpacing(0)
