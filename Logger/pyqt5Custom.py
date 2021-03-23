@@ -2870,6 +2870,11 @@ class Group(QGroupBox):
             return 0
         return self.__form.getRowsPerChunk()
            
+    def getRowCount(self):
+        if self.checkForm():
+            return 0
+        return self.__form.getRowCount()
+           
     def __getParent(self):
         p = self.parent()
         while not isinstance(p, QWidget):
@@ -2968,6 +2973,11 @@ class FormLayout(QFormLayout):
             return 0
         return self.__form.getRowsPerChunk()
            
+    def getRowCount(self):
+        if self.checkForm():
+            return 0
+        return self.__form.getRowCount()
+           
     def timerEvent(self, QTimerEvent):
         if self.isWaitScreenVisible():
             self.setWaitScreenVisible(False)
@@ -3037,6 +3047,11 @@ class FormGridLayout(QGridLayout):
         if self.checkForm():
             return 0
         return self.__form.getRowsPerChunk()
+    
+    def getRowCount(self):
+        if self.checkForm():
+            return 0
+        return self.__form.getRowCount()
            
 class WaitIcon(ChildButton):
     def __init__(self, degree = 45):
@@ -3437,7 +3452,7 @@ class Form:
                     self.setCurrentRow(row)
                     for name in self.__form[row]:
                         self.__currentRow.addItems(self.__form[row][name])
-            if len(unloadedRows) < self.__chunkSize:
+            if len(unloadedRows) <= self.__chunkSize:
                 self.__setStartRow(row+1)
             self.__addNewChunk(False)
         return self

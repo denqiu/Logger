@@ -248,7 +248,7 @@ class Items(Form):
         return Item(self.__index, self.newFormRow(), itemId, self.__user, self.__users, self)
         
     def queryItems(self):
-        for i in range(1, 31):
+        for i in range(1, 61):
             self.addButton(self.createItem(i), self.getFont())
             self.__index += 1
            
@@ -778,7 +778,7 @@ class Logger(ParentWindow):
         size = scroll.getItems().getRowCount()
         if self.isMaximized():
             if size < 20:
-                chunks = int((20 - size) // scroll.getWidgetOrLayoutRowsPerChunk())
+                chunks = int((20 - size) / scroll.getWidgetOrLayoutRowsPerChunk())
         else:
             if size < 8:
                 chunks = 1
