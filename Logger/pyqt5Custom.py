@@ -1417,6 +1417,11 @@ class ScrollArea(QScrollArea):
         if self.checkWidgetOrLayout():
             return 0
         return self.getWidgetOrLayout().getRowsPerChunk()
+    
+    def getWidgetOrLayoutRowCount(self):
+        if self.checkWidgetOrLayout():
+            return 0
+        return self.getWidgetOrLayout().getRowCount()
            
     def setBackground(self, name = None, color = "white"):
         if not name is None:

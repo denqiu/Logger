@@ -775,7 +775,7 @@ class Logger(ParentWindow):
                 
     def loadChunks(self, scroll):
         chunks = 0
-        size = scroll.getItems().getRowCount()
+        size = scroll.getWidgetOrLayoutRowCount()
         if self.isMaximized():
             if size < 20:
                 chunks = int((20 - size) / scroll.getWidgetOrLayoutRowsPerChunk())
