@@ -75,12 +75,22 @@ class Style:
     
 class SearchForm:
     def __init__(self):
+        self.searchVisible(True)
         self.searchRows()
         self.searchNames()
         self.searchClasses()
         self.setMatchCases()
         self.clearResults()
-        
+     
+    # if visible, all rows that have been loaded onto the layout are searchable. 
+    # Otherwise, all rows, regardless of whether they have been loaded or not, are searchable.
+    def searchVisible(self, isVisible):
+        self.__isVisible = isVisible
+        return self
+    
+    def isVisible(self):
+        return self.__isVisible
+     
     def searchRows(self, *rows):
         self.rows = rows
         return self
@@ -3243,15 +3253,20 @@ class Form:
     
     def getParent(self):
         return self.__parent
-        
-    def clearForm(self):
-        self.__form = {}
+    
+    def __clearLayout(self):
+        self.__formRows = {}
         self.__setStartRow(0)
-        self.__start = True
         if not self.__layout is None:
             self.__layout.clear()
         if not self.__currentRow is None:
             self.__currentRow = None
+        
+    def clearForm(self):
+        self.__form = {}
+        self.__clearFilteredForm()
+        self.__start = True
+        self.__clearLayout()
         return self
         
     def newRow(self):
@@ -3320,7 +3335,7 @@ class Form:
             if self.__currentRow is None:
                 if self.__start:
                     self.__start = False
-                    self.setCurrentRow()
+                    self.addCurrentRow()
         self.__row[name] = obj
         if not self.__currentRow is None:
             if not self.__stopLoading(self.newFormRow()):
@@ -3420,7 +3435,7 @@ class Form:
     def newFormRow(self):
         return self.formSize()+1
     
-    def setCurrentRow(self, row = None, alignment = None, font = None):
+    def addCurrentRow(self, row = None, alignment = None, font = None):
         if row is None:
             row = self.newFormRow()
         if self.__stopLoading(row):
@@ -3433,6 +3448,12 @@ class Form:
             if not alignment is None:
                 self.__currentRow.setAlignment(alignment)
             self.__layout.addRow(self.__currentRow.layout())
+            self.__formRows[row] = self.__currentRow
+        return self
+    
+    def setCurrentRow(self, row):
+        if row in self.__formRows:
+            self.__currentRow = self.__formRows[row]
         return self
         
     def isCurrentRowVisible(self):
@@ -3445,20 +3466,29 @@ class Form:
             return 0
         return self.__currentRow.size()
     
+    def __filteredSize(self):
+        return len(self.__filteredForm)
+    
     def loadChunk(self):
-        start = self.__startRow-1
-        if start < self.formSize() and start > -1:
+        startRow = self.__startFilteredRow if self.__filterOn else self.__startRow 
+        start = startRow-1
+        size = self.__filteredSize() if self.__filterOn else self.formSize()
+        if start < size and start > -1:
             self.__addNewChunk(True)
-            unloadedRows = list(self.__form.keys())[start:]
+            f = self.__filteredForm if self.__filterOn else self.__form
+            unloadedRows = list(f.keys())[start:]
             for row in unloadedRows:
                 if self.__stopLoading(row):
                     break
                 else:
-                    self.setCurrentRow(row)
-                    for name in self.__form[row]:
-                        self.__currentRow.addItems(self.__form[row][name])
+                    self.addCurrentRow(row)
+                    for name in f[row]:
+                        self.__currentRow.addItems(f[row][name])
             if len(unloadedRows) <= self.__chunkSize:
-                self.__setStartRow(row+1)
+                if self.__filterOn:
+                    self.__setFilteredStartRow(row+1)
+                else:
+                    self.__setStartRow(row+1)
             self.__addNewChunk(False)
         return self
         
@@ -3471,7 +3501,7 @@ class Form:
             self.__rowsAligned[row] = alignment
         if not self.__layout is None:
             if self.checkColumnSize():
-                self.setCurrentRow(row, alignment, font)
+                self.addCurrentRow(row, alignment, font)
         self.__form[row] = self.__row
         return self.newRow()
     
@@ -3480,14 +3510,24 @@ class Form:
             rowNumber = len(self.__form)
         if rowNumber in self.__form:
             r = self.__form.pop(rowNumber)
+            self.__formRows.pop(rowNumber)
             nums = [(n-1, n) for n in self.__form if n > rowNumber]
             if len(nums) > 0:
                 for (newKey, key) in nums:
                     self.__form[newKey] = self.__form.pop(key)
+                    self.__formRows[newKey] = self.__formRows.pop(key)
             if not self.__layout is None:
                 self.__layout.removeRow(rowNumber-1)
             return r
         return None
+    
+    def __searchRow(self, searchForm, row):
+        if self.checkRowsPerChunk():
+            if searchForm.isVisible():
+                if row >= self.__startRow:
+                    return False
+        searchForm.search(row, self.__form[row])
+        return True
     
     def searchObjects(self, searchForm = None):
         if searchForm is None:
@@ -3495,16 +3535,47 @@ class Form:
         else:
             if searchForm.searchAllRows():
                 for r in self.__form:
-                    searchForm.search(r, self.__form[r])
+                    if not self.__searchRow(searchForm, r):
+                        break
             else:
                 for r in searchForm.rows:
                     if r in self.__form:
-                        searchForm.search(r, self.__form[r])
+                        if not self.__searchRow(searchForm, r):
+                            break
                     else:
                         print("Row {} does not exist".format(r))
             results = searchForm.results
             searchForm.__init__()
         return self.searchResults(results)
+    
+    def __clearFilteredForm(self):
+        self.__filteredForm = {}
+        self.__setFilteredStartRow(0)
+        self.isFilterOn(False)
+        return self
+    
+    def isFilterOn(self, filterOn):
+        self.__filterOn = filterOn
+        return self
+    
+    #searches and displays filtered rows and objects
+    def filter(self, searchForm = None):
+        self.__clearLayout()
+        if searchForm is None:
+            self.__clearFilteredForm()
+            self.loadChunk()
+        else:
+            self.searchObjects(searchForm)
+            self.__filteredForm = {**self.results}
+            self.isFilterOn(True)
+            r = 1
+            for i in self.__filteredForm:
+                self.__filteredForm[r] = self.__filteredForm.pop(i)
+                r += 1
+            self.__setFilteredStartRow()
+            if len(self.__filteredForm) > 0:
+                self.__setFilteredStartRow(1)
+                self.loadChunk()
     
     def mapCustomResults(self, isCustom):
         self.__mapCustom = isCustom
@@ -3601,25 +3672,38 @@ class Form:
         self.__startRow = row
         return self
     
+    def __setFilteredStartRow(self, row = 0):
+        self.__filteredStartRow = row
+        return self
+    
     def getRowCount(self):
         if self.checkRowsPerChunk():
-            return self.__startRow-1
+            startRow = self.__filteredStartRow if self.__filterOn else self.__startRow
+            return startRow-1
         return self.formSize()
         
     def __stopLoading(self, row):
         if self.checkRowsPerChunk():
             if self.__isNewChunk:
-                check = row - self.__startRow == self.__chunkSize
+                startRow = self.__filteredStartRow if self.__filterOn else self.__startRow
+                check = row - startRow == self.__chunkSize
             else:
                 check = row > self.__chunkSize
             if check:
                 if self.__isNewChunk:
-                    self.__setStartRow()
-                if self.__startRow < 1:
-                    self.__setStartRow(row)
+                    if self.__filterOn:
+                        self.__setFilteredStartRow()
+                    else:
+                        self.__setStartRow()
+                startRow = self.__filteredStartRow if self.__filterOn else self.__startRow
+                if startRow < 1:
+                    if self.__filterOn:
+                        self.__setFilteredStartRow(row)
+                    else:
+                        self.__setStartRow(row)
                 return True
         return False
-    
+
     def __addNewChunk(self, isNewChunk):
         self.__isNewChunk = isNewChunk
         return self
@@ -3650,6 +3734,7 @@ class Form:
                     if i in self.__rowsAligned:
                         hlay.setAlignment(self.__rowsAligned[i])
                     form.addRow(hlay)
+                    self.__formRows[i] = hlay
             if self.__tablelize:
                 form.setContentsMargins(0, 0, 0, 0)
                 form.setSpacing(0)
@@ -3664,7 +3749,7 @@ class Form:
                 gridLayout.setSpacing(0)
             self.__gridLayout = gridLayout
             if self.__isAdding:
-                self.setCurrentRow(size)
+                self.addCurrentRow(size)
         return self.__gridLayout
     
     def group(self, parent = None):
