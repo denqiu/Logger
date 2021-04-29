@@ -76,6 +76,19 @@ class WriteSql:
         self.code = list(reversed(code))
         return self
     
+    def __cascade(self, what):
+        c = self.code[-1]
+        f = "foreign key"
+        if c[:len(f)] == f and "references" in c:
+            self.code[-1] += " on {} cascade".format(what)
+        return self
+    
+    def deleteCascade(self):
+        return self.__cascade("delete")
+    
+    def updateCascade(self):
+        return self.__cascade("update")
+    
     def clear(self):
         self.code.clear()
         self.column_count = 0
