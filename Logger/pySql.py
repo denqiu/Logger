@@ -77,10 +77,12 @@ class WriteSql:
         return self
     
     def __cascade(self, what):
-        c = self.code[-1]
-        f = "foreign key"
-        if c[:len(f)] == f and "references" in c:
-            self.code[-1] += " on {} cascade".format(what)
+        code = list(reversed(self.code))
+        for i, c in enumerate(code):
+            r = re.search("foreign key \(.*\) references .*", c)
+            if not r is None:
+                code[i] += " on {} cascade".format(what)
+        self.code = list(reversed(code))
         return self
     
     def deleteCascade(self):
