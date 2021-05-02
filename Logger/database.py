@@ -2,7 +2,7 @@ from pySql import *
 
 class Execute(ExecuteSql):
     def __init__(self, title, db=None, printText=True, debug=False):
-        ExecuteSql.__init__(self, title, db, printText, debug, accessType=AccessSql.SSH_ACCESS)
+        ExecuteSql.__init__(self, title, db, printText, debug, accessType=AccessSql.PY_ACCESS)
         #self.maintainDatabase(True)
 
 class Create(CreateSql, Execute):

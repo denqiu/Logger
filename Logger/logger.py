@@ -722,7 +722,7 @@ class Logger(ParentWindow):
         app = QApplication(sys.argv)
         self.__autoSize = False
         try:
-            self.db = AccessSql(True, accessType=AccessSql.SSH_ACCESS)
+            self.db = AccessSql(True, accessType=AccessSql.PY_ACCESS)
             self.__start = True
         except SystemExit as e:
             self.db = str(e)
