@@ -330,7 +330,7 @@ class PySql:
         except con.Error as e:
             self.results = (self.__checkError(e.msg), None, None)
         return self
-    
+        
     def callFunction(self, query, *args):
         try:
             self.__function = True
@@ -646,20 +646,22 @@ class GetSql(ExecuteSql):
     def __init__(self, db = None, printText = True, debug = False, execute = ExecuteSql):
         execute.__init__(self, "gets", db, printText, debug)
         
-    def getId(self, table, args, where, index, fromTable = None):
+    def getId(self, table, args, where, index, fromTable = None, table_in_name = False):
         if fromTable is None:
             fromTable = table
         c = "{}_id".format(table)
         code = "return ifnull((select {} from {} where {}), 0);".format(c, fromTable, where)
+        if table_in_name:
+            c = "{}_{}".format(fromTable, c)
         return self.createFunction("get_{}".format(c), args, "int", code, index)
      
-    def get(self, table, returnType, column, column_in_name, get_from_id, index, whereTable = None):
+    def get(self, table, returnType, column, column_in_name, get_from_id, index, whereTable = None, functionName = None):
         if whereTable is None:
             whereTable = table
-        g = "get_{}".format(table)
-        name = "{}_{}".format(g, column) if column_in_name else g
+        g = "get_{}".format(table)    
+        name = "{}_{}".format(g, column) if column_in_name else g  
         if get_from_id:
-            code = "return get_{}({}_id(g));".format(column, name if column_in_name else g)
+            code = "return get_{}({}_id(g));".format(column if functionName is None else functionName, name if column_in_name else g)
         else:
             code = "return (select {} from {} where {}_id = g);".format(column, table, whereTable)
         return self.createFunction(name, "g int", returnType, code, index)
@@ -825,10 +827,9 @@ class PreparedUpdateStatements(ExecuteSql):
             if self.checkString(v, "what", False, True):
                 setStatements[v] = v
         if self.__whereExists:
-            keys = ["set"] + keys[:-1] + ["where"] + keys[-1:]
+            name = "_".join(keys).replace("set", "set_").replace("where", "where_")
         else:
-            keys = ["set"] + keys
-        name = "_".join(keys)
+            name = keys[0].replace("set", "set_")
         getSets = ["{}, '=?".format(s)+"'" for s in args if self.checkString(s, "set") and self.checkString(s, "what", isEnd=True)]
         isWhere = ", ' where ', where1_what, '=?'" if self.__whereExists else ""
         prepStatement = "concat('update ', table_name, ' set ', {}{})".format(", ".join(getSets), isWhere)
@@ -843,7 +844,7 @@ class PreparedUpdateStatements(ExecuteSql):
             c += 1
             args.append("{}{}_what".format(action, whatCount))
             args.append("{}{}_{}".format(action, c, arg))
-        self.__args["{}{}".format(arg, count)] = args
+        self.__args["{}{}{}".format(action, arg, count)] = args
         return self
         
     def addSetArg(self, arg, count = 1):
@@ -875,7 +876,13 @@ class PreparedUpdateStatements(ExecuteSql):
 class PreparedDeleteStatements(ExecuteSql):
     def __init__(self, db = None, printText = True, debug = False, execute = ExecuteSql):
         execute.__init__(self, "prepared delete statements", db, printText, debug)
-        
+    
+    def execute(self, i=1):
+        prepStatement = "concat('delete from ', table_name, ' where ', table_name, '_id=?')"
+        args = {"table_id":"int"}
+        setStatements = {"table_id":"table_id"}
+        return self.createPreparedStatement("delete_table_id", args, prepStatement, setStatements, i)
+    
 class AddSql(ExecuteSql):
     def __init__(self, db = None, printText = True, debug = False, execute = ExecuteSql):
         execute.__init__(self, "adds", db, printText, debug)
